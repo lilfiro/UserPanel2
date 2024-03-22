@@ -35,15 +35,12 @@ public class LoginActivity extends AppCompatActivity {
                     @Override
                     public void onUserCheck(boolean userExists) {
                         if (userExists) {
-                            // Successful login, navigate to the next activity
+                            // basarili giriste HomePage yonlendirir
                             Toast.makeText(LoginActivity.this, "Giriş Başarılı", Toast.LENGTH_SHORT).show();
-                            // Navigate to HomePageActivity
                             Intent intent = new Intent(LoginActivity.this, HomePage.class);
-                            intent.putExtra("USERNAME", username); // Pass the username to HomePage
                             startActivity(intent);
-                            finish(); // Optional: Close the LoginActivity to prevent going back
+                            finish(); // Optional: LoginActivity'ye donmemek icin kapatilabilir
                         } else {
-                            // Invalid login, show a toast or handle accordingly
                             Toast.makeText(LoginActivity.this, "Geçersiz Giriş", Toast.LENGTH_SHORT).show();
                         }
                     }

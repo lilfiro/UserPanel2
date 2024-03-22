@@ -21,20 +21,13 @@ import java.util.Locale;
 
 public class ReceiptActivity extends AppCompatActivity {
 
-    // Database connection details
+    // DatabaseHelper classindan, database girisini saglayan bilgileri ceker
     private static final String DB_URL = DatabaseHelper.DB_URL;
     private static final String DB_USER = DatabaseHelper.DB_USER;
     private static final String DB_PASSWORD = DatabaseHelper.DB_PASSWORD;
 
-    private Spinner receiptTypeSpinner;
-    private EditText receiptDateText;
-    private Spinner receiptWarehouseSpinner;
-    private EditText receiptIDText;
-    private EditText receiptAddressText;
-    private EditText desc1Text;
-    private EditText desc2Text;
-    private EditText desc3Text;
-    private EditText desc4Text;
+    private Spinner receiptTypeSpinner, receiptWarehouseSpinner;
+    private EditText receiptDateText, receiptIDText, receiptAddressText, desc1Text, desc2Text, desc3Text, desc4Text;
     private Button saveButton;
 
     @Override
@@ -54,7 +47,7 @@ public class ReceiptActivity extends AppCompatActivity {
         desc4Text = findViewById(R.id.desc4Text);
         saveButton = findViewById(R.id.saveButton);
 
-        // Populate spinners with data from array resources
+        // spinner elementinin kullanacagi secenekleri arrays.xml ismindeki degerler dosyasindan cekiyoruz
         ArrayAdapter<CharSequence> typeAdapter = ArrayAdapter.createFromResource(this,
                 R.array.receipt_types, android.R.layout.simple_spinner_item);
         typeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -64,8 +57,6 @@ public class ReceiptActivity extends AppCompatActivity {
                 R.array.receipt_warehouses, android.R.layout.simple_spinner_item);
         warehouseAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         receiptWarehouseSpinner.setAdapter(warehouseAdapter);
-
-        // Set up date picker dialog for receiptDateText spinner
         receiptDateText.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -73,10 +64,10 @@ public class ReceiptActivity extends AppCompatActivity {
             }
         });
 
-        // Generate and fill receipt ID
+        // fis id olusturma fonks
         generateAndFillReceiptID();
 
-        // Set click listener for the save button
+        // click listener
         saveButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -86,21 +77,21 @@ public class ReceiptActivity extends AppCompatActivity {
     }
 
     private void showDatePickerDialog() {
-        // Set up MaterialDatePicker for date selection
+        // MaterialDatePicker ile tarih secme popupu cikar
         MaterialDatePicker.Builder<Long> builder = MaterialDatePicker.Builder.datePicker();
-        builder.setTitleText("Select Date");
+        builder.setTitleText("Tarih Seçin");
 
         final MaterialDatePicker<Long> picker = builder.build();
 
-        // Show date picker dialog
+        // tarih secme diyalogu
         picker.show(getSupportFragmentManager(), picker.toString());
 
-        // Set listener to handle date selection
+        // tarih secilmesi icin listener
         picker.addOnPositiveButtonClickListener(new MaterialPickerOnPositiveButtonClickListener<Long>() {
             @Override
             public void onPositiveButtonClick(Long selection) {
-                // Convert selection to date format if needed
-                // Update the receiptDateText spinner with the selected date
+                // secilen tarihi uygun formata cevirir
+                // receiptDateText spinner elementini gunceller
                 Calendar calendar = Calendar.getInstance();
                 calendar.setTimeInMillis(selection);
                 SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
@@ -111,14 +102,14 @@ public class ReceiptActivity extends AppCompatActivity {
     }
 
     private void generateAndFillReceiptID() {
-        // Generate receipt ID
+        // ID olusturma fonks
         SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmssSSS", Locale.getDefault());
         String receiptID = sdf.format(new Date());
         receiptIDText.setText(receiptID);
     }
 
     private void saveReceipt() {
-        // Retrieve data from UI elements
+        // UI elementlerinden verileri alma fonks
         String receiptType = receiptTypeSpinner.getSelectedItem().toString();
         String receiptDate = receiptDateText.getText().toString();
         String receiptWarehouse = receiptWarehouseSpinner.getSelectedItem().toString();
@@ -129,9 +120,9 @@ public class ReceiptActivity extends AppCompatActivity {
         String desc3 = desc3Text.getText().toString();
         String desc4 = desc4Text.getText().toString();
 
-        // Validate input (perform any necessary validation here)
+        // Giris dogrulama methodu eklenebilir
 
-        // Save receipt data to the database
+        // verilerini db kaydeder
         saveToDatabase(receiptType, receiptDate, receiptWarehouse, receiptID, receiptAddress, desc1, desc2, desc3, desc4);
     }
 
