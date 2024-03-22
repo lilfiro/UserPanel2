@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".LoginActivity">
+
+    <Button
+        android:id="@+id/loginbt"
+        android:layout_width="167dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="122dp"
+        android:layout_marginTop="29dp"
+        android:layout_marginEnd="122dp"
+        android:layout_marginBottom="355dp"
+        android:text="@string/login"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/passwordlb" />
+
+    <EditText
+        android:id="@+id/passwordlb"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="96dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="95dp"
+        android:layout_marginBottom="109dp"
+        android:autofillHints=""
+        android:background="?android:attr/listDivider"
+        android:ems="10"
+        android:inputType="textPassword"
+        android:minHeight="48dp"
+        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        android:textColorHint="#2E7D32"
+        android:visibility="visible"
+        app:layout_constraintBottom_toTopOf="@+id/loginbt"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.47"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/usernamelb"
+        tools:ignore="LabelFor,DuplicateSpeakableTextCheck,SpeakableTextPresentCheck"
+        tools:visibility="visible" />
+
+    <EditText
+        android:id="@+id/usernamelb"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="96dp"
+        android:layout_marginTop="187dp"
+        android:layout_marginEnd="95dp"
+        android:layout_marginBottom="12dp"
+        android:autofillHints=""
+        android:background="?android:attr/listDivider"
+        android:ems="10"
+        android:inputType="text"
+        android:minHeight="48dp"
+        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        android:visibility="visible"
+        app:layout_constraintBottom_toTopOf="@+id/passwordlb"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:ignore="LabelFor,SpeakableTextPresentCheck" />
+</androidx.constraintlayout.widget.ConstraintLayout>

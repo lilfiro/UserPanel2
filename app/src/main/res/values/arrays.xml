@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="receipt_warehouses">
+        <item>Merkez</item>
+        <item>ANKARA</item>
+        <!-- Add more items as needed -->
+    </string-array>
+
+    <string-array name="receipt_types">
+        <item>Default</item>
+        <item>Test</item>
+        <!-- Add more items as needed -->
+    </string-array>
+</resources>
