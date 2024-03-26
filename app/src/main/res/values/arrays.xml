@@ -3,12 +3,13 @@
     <string-array name="receipt_warehouses">
         <item>Merkez</item>
         <item>ANKARA</item>
+        <item>İSTANBUL</item>
         <!-- Add more items as needed -->
     </string-array>
 
     <string-array name="receipt_types">
-        <item>Default</item>
-        <item>Test</item>
+        <item>Üretim Giriş Fişi</item>
+        <item>Deneme Fişi</item>
         <!-- Add more items as needed -->
     </string-array>
 </resources>
