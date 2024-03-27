@@ -31,7 +31,7 @@ public class MyPagerAdapter extends FragmentStateAdapter {
         return fragmentList.size();
     }
 
-    @Override
+
     public CharSequence getPageTitle(int position) {
         return fragmentTitles.get(position);
     }

@@ -1,13 +1,12 @@
 package com.example.userpanel2;
 
+import androidx.fragment.app.FragmentActivity;
 import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.fragment.app.FragmentManager; // Import FragmentManager
 import androidx.viewpager2.widget.ViewPager2;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
-public class ReceiptActivity extends AppCompatActivity {
+public class ReceiptActivity extends FragmentActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -18,12 +17,13 @@ public class ReceiptActivity extends AppCompatActivity {
         ViewPager2 viewPager = findViewById(R.id.view_pager);
 
         // Create the adapter with getSupportFragmentManager()
-        MyPagerAdapter adapter = new MyPagerAdapter(getSupportFragmentManager());
+        MyPagerAdapter adapter = new MyPagerAdapter(this);
+
 
         // Add fragments to the adapter
-        adapter.addFragment(new FirstFragment(), "First Fragment");
-        adapter.addFragment(new SecondFragment(), "Second Fragment");
-        adapter.addFragment(new ThirdFragment(), "Third Fragment");
+        adapter.addFragment(new FirstFragment(), "Giriş");
+        adapter.addFragment(new SecondFragment(), "İşlem");
+        adapter.addFragment(new ThirdFragment(), "Özet");
 
         // Set the adapter to the ViewPager2
         viewPager.setAdapter(adapter);
