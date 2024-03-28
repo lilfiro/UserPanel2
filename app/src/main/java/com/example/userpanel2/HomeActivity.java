@@ -6,14 +6,14 @@ import android.view.View;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
-public class HomePage extends AppCompatActivity {
+public class HomeActivity extends AppCompatActivity {
     private FloatingActionButton fab, option1Fab, option2Fab;
     private boolean isExpanded = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.main_page);
+        setContentView(R.layout.home_activity);
 
         fab = findViewById(R.id.FloatBt);
         option1Fab = findViewById(R.id.option1);
@@ -32,7 +32,7 @@ public class HomePage extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 // ReceiptActivity yonlendirir
-                startActivity(new Intent(HomePage.this, ReceiptActivity.class));
+                startActivity(new Intent(HomeActivity.this, ReceiptActivity.class));
             }
         });
     }

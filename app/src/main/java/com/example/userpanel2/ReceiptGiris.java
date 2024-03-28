@@ -25,7 +25,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 
-public class FirstFragment extends Fragment {
+public class ReceiptGiris extends Fragment {
 
     // DatabaseHelper classindan, database girisini saglayan bilgileri ceker
     private static final String DB_URL = DatabaseHelper.DB_URL;
@@ -40,7 +40,7 @@ public class FirstFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         // Inflate the layout for this fragment
-        View rootView = inflater.inflate(R.layout.fragment_first, container, false);
+        View rootView = inflater.inflate(R.layout.receipt_giris, container, false);
 
         // Initialize UI elements
         receiptTypeSpinner = rootView.findViewById(R.id.receiptTypeSpinner);

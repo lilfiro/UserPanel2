@@ -17,7 +17,7 @@ public class LoginActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.login_activity);
 
         usernameEditText = findViewById(R.id.usernamelb);
         passwordEditText = findViewById(R.id.passwordlb);
@@ -37,7 +37,7 @@ public class LoginActivity extends AppCompatActivity {
                         if (userExists) {
                             // basarili giriste HomePage yonlendirir
                             Toast.makeText(LoginActivity.this, "Giriş Başarılı", Toast.LENGTH_SHORT).show();
-                            Intent intent = new Intent(LoginActivity.this, HomePage.class);
+                            Intent intent = new Intent(LoginActivity.this, HomeActivity.class);
                             startActivity(intent);
                             finish(); // Optional: LoginActivity'ye donmemek icin kapatilabilir
                         } else {
