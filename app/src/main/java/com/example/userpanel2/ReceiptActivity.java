@@ -21,8 +21,8 @@ public class ReceiptActivity extends FragmentActivity {
 
 
         // Add fragments to the adapter
-        adapter.addFragment(new FirstFragment(), "Giriş");
-        adapter.addFragment(new SecondFragment(), "İşlem");
+        adapter.addFragment(new ReceiptGiris(), "Giriş");
+        adapter.addFragment(new ReceiptIslem(), "İşlem");
         adapter.addFragment(new ReceiptOzet(), "Özet");
 
         // Set the adapter to the ViewPager2
