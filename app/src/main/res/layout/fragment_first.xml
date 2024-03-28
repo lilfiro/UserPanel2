@@ -2,22 +2,19 @@
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/savebt"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#C6FFB3"
-    android:visibility="visible">
+    android:layout_height="match_parent">
 
 
     <TextView
         android:id="@+id/receiptText"
         android:layout_width="0dp"
-        android:layout_height="48dp"
-        android:layout_marginTop="16dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="50dp"
         android:text="Fiş"
         android:textSize="20sp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintHorizontal_bias="0.075"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
@@ -42,7 +39,7 @@
     <Spinner
         android:id="@+id/receiptTypeSpinner"
         android:layout_width="0dp"
-        android:layout_height="48dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
         android:background="#FFFFFF"
         android:entries="@array/receipt_types"
@@ -55,7 +52,7 @@
     <EditText
         android:id="@+id/receiptDateText"
         android:layout_width="0dp"
-        android:layout_height="48dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
         android:background="#FFFFFF"
         android:clickable="true"
@@ -63,7 +60,6 @@
         android:hint="Tarih giriniz"
         android:minHeight="48dp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/receiptTypeSpinner" />
 
@@ -78,7 +74,6 @@
         android:focusable="false"
         android:inputType="none"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/receiptDateText"
         tools:ignore="SpeakableTextPresentCheck" />
@@ -132,7 +127,6 @@
         android:hint="Açıklama2"
         android:inputType="text"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/desc1Text" />
 
@@ -146,7 +140,6 @@
         android:hint="Açıklama3"
         android:inputType="text"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/desc2Text" />
 
@@ -160,8 +153,9 @@
         android:hint="Açıklama4"
         android:inputType="text"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/desc3Text" />
+
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>

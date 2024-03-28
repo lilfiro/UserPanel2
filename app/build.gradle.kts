@@ -42,6 +42,10 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     implementation(files("libs/jtds-1.3.1.jar"))
     implementation("com.google.android.material:material:1.5.0")
+    implementation ("androidx.viewpager2:viewpager2:1.0.0")
+    implementation ("androidx.fragment:fragment:1.4.0")
+
+
 
 
 }
