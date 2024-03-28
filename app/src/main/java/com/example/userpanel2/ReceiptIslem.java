@@ -1,64 +1,87 @@
 package com.example.userpanel2;
 
+import android.os.AsyncTask;
 import android.os.Bundle;
-
 import androidx.fragment.app.Fragment;
-
+import androidx.fragment.app.FragmentTransaction;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ListView;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * A simple {@link Fragment} subclass.
- * Use the {@link SecondFragment#newInstance} factory method to
- * create an instance of this fragment.
- */
 public class ReceiptIslem extends Fragment {
 
-    // TODO: Rename parameter arguments, choose names that match
-    // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-    private static final String ARG_PARAM1 = "param1";
-    private static final String ARG_PARAM2 = "param2";
+    private static final String DB_URL = DatabaseHelper.DB_URL;
+    private static final String DB_USER = DatabaseHelper.DB_USER;
+    private static final String DB_PASSWORD = DatabaseHelper.DB_PASSWORD;
 
-    // TODO: Rename and change types of parameters
-    private String mParam1;
-    private String mParam2;
-
-    public SecondFragment() {
-        // Required empty public constructor
-    }
-
-    /**
-     * Use this factory method to create a new instance of
-     * this fragment using the provided parameters.
-     *
-     * @param param1 Parameter 1.
-     * @param param2 Parameter 2.
-     * @return A new instance of fragment SecondFragment.
-     */
-    // TODO: Rename and change types and number of parameters
-    public static SecondFragment newInstance(String param1, String param2) {
-        SecondFragment fragment = new SecondFragment();
-        Bundle args = new Bundle();
-        args.putString(ARG_PARAM1, param1);
-        args.putString(ARG_PARAM2, param2);
-        fragment.setArguments(args);
-        return fragment;
-    }
-
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        if (getArguments() != null) {
-            mParam1 = getArguments().getString(ARG_PARAM1);
-            mParam2 = getArguments().getString(ARG_PARAM2);
-        }
-    }
+    private EditText itemIdEditText;
+    private Button retrieveItemListButton;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.receipt_islem, container, false);
+        View rootView = inflater.inflate(R.layout.receipt_islem, container, false);
+
+        itemIdEditText = rootView.findViewById(R.id.itemIdEditText);
+        retrieveItemListButton = rootView.findViewById(R.id.retrieveItemListButton);
+
+        // Set onClickListener for the retrieveItemListButton
+        retrieveItemListButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // Retrieve item list from database asynchronously
+                new FetchItemListTask().execute();
+            }
+        });
+
+        return rootView;
+    }
+
+    private class FetchItemListTask extends AsyncTask<Void, Void, List<String>> {
+
+        @Override
+        protected List<String> doInBackground(Void... voids) {
+            List<String> itemList = new ArrayList<>();
+            try (Connection connection = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+                String sql = "SELECT name FROM Items";
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    try (ResultSet resultSet = statement.executeQuery()) {
+                        while (resultSet.next()) {
+                            String itemName = resultSet.getString("name");
+                            itemList.add(itemName);
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            return itemList;
+        }
+
+        @Override
+        protected void onPostExecute(List<String> itemList) {
+            // Create a new instance of ItemListFragment and pass the item list data
+            ItemListFragment itemListFragment = new ItemListFragment();
+            Bundle args = new Bundle();
+            args.putStringArrayList("itemList", new ArrayList<>(itemList));
+            itemListFragment.setArguments(args);
+
+            // Replace the current fragment with ItemListFragment
+            FragmentTransaction transaction = getParentFragmentManager().beginTransaction();
+            transaction.replace(R.id.fragment_container, itemListFragment);
+            transaction.addToBackStack(null); // Add to back stack to allow back navigation
+            transaction.commit();
+        }
     }
 }
