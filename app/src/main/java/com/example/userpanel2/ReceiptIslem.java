@@ -4,13 +4,14 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
+
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.EditText;
-import android.widget.ListView;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -25,7 +26,6 @@ public class ReceiptIslem extends Fragment {
     private static final String DB_USER = DatabaseHelper.DB_USER;
     private static final String DB_PASSWORD = DatabaseHelper.DB_PASSWORD;
 
-    private EditText itemIdEditText;
     private Button retrieveItemListButton;
 
     @Override
@@ -33,7 +33,6 @@ public class ReceiptIslem extends Fragment {
                              Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.receipt_islem, container, false);
 
-        itemIdEditText = rootView.findViewById(R.id.itemIdEditText);
         retrieveItemListButton = rootView.findViewById(R.id.retrieveItemListButton);
 
         // Set onClickListener for the retrieveItemListButton
@@ -66,22 +65,20 @@ public class ReceiptIslem extends Fragment {
             } catch (SQLException e) {
                 e.printStackTrace();
             }
+            Log.d("ItemFetch", "Item list size: " + itemList.size());
             return itemList;
         }
 
+
         @Override
         protected void onPostExecute(List<String> itemList) {
-            // Create a new instance of ItemListFragment and pass the item list data
-            ItemListFragment itemListFragment = new ItemListFragment();
+            // Show the bottom sheet dialog with the retrieved item list
+            ItemListBottomSheetDialogFragment bottomSheetDialogFragment = new ItemListBottomSheetDialogFragment();
             Bundle args = new Bundle();
             args.putStringArrayList("itemList", new ArrayList<>(itemList));
-            itemListFragment.setArguments(args);
-
-            // Replace the current fragment with ItemListFragment
-            FragmentTransaction transaction = getParentFragmentManager().beginTransaction();
-            transaction.replace(R.id.fragment_container, itemListFragment);
-            transaction.addToBackStack(null); // Add to back stack to allow back navigation
-            transaction.commit();
+            bottomSheetDialogFragment.setArguments(args);
+            bottomSheetDialogFragment.show(getParentFragmentManager(), bottomSheetDialogFragment.getTag());
         }
+
     }
 }
