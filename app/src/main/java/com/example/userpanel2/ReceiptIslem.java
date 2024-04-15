@@ -39,12 +39,9 @@ public class ReceiptIslem extends Fragment implements QuantityDialogFragment.Qua
         textViewSummary = rootView.findViewById(R.id.textViewSummary);
 
         // Set onClickListener for the retrieveItemListButton
-        retrieveItemListButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Retrieve item list from database asynchronously
-                new FetchItemListTask().execute();
-            }
+        retrieveItemListButton.setOnClickListener(v -> {
+            // Retrieve item list from database asynchronously
+            new FetchItemListTask().execute();
         });
 
         return rootView;

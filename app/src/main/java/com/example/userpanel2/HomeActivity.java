@@ -37,7 +37,7 @@ public class HomeActivity extends AppCompatActivity {
         });
     }
 
-    // acilip kapanma (sadece bir illusion :D) animasyonunu halleden fonksiyon
+    // acilip kapanma (illusion) animasyonunu halleden fonksiyon
     private void toggleFABOptions() {
         if (!isExpanded) {
             option1Fab.setVisibility(View.VISIBLE);
