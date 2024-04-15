@@ -9,6 +9,8 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
 
+// Inside ItemListAdapter.java
+
 public class ItemListAdapter extends RecyclerView.Adapter<ItemListAdapter.ItemViewHolder> {
 
     private List<String> itemList;
@@ -30,9 +32,8 @@ public class ItemListAdapter extends RecyclerView.Adapter<ItemListAdapter.ItemVi
 
     @Override
     public void onBindViewHolder(@NonNull ItemViewHolder holder, int position) {
-        String itemName = itemList.get(position);
+        final String itemName = itemList.get(position);
         holder.bind(itemName, listener);
-        holder.itemNameTextView.setText(itemName);
     }
 
     @Override
@@ -50,16 +51,22 @@ public class ItemListAdapter extends RecyclerView.Adapter<ItemListAdapter.ItemVi
         }
 
         public void bind(final String itemName, final OnItemClickListener listener) {
+            itemNameTextView.setText(itemName);
+
+            // Set click listener for the item view
             itemView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    // Pass the selected item name to the click listener
                     listener.onItemClick(itemName);
                 }
             });
         }
     }
 
+    // Define an interface for item click listener
     public interface OnItemClickListener {
         void onItemClick(String itemName);
     }
 }
+
