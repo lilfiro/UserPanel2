@@ -9,7 +9,7 @@
 
     <string-array name="receipt_types">
         <item>Üretim Giriş Fişi</item>
-        <item>Deneme Fişi</item>
+        <item>Sevkiyat Fişi</item>
         <!-- Add more items as needed -->
     </string-array>
 </resources>
