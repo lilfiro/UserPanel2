@@ -1,52 +1,38 @@
 package com.example.userpanel2;
+
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
-
+import android.widget.Button;
 import androidx.appcompat.app.AppCompatActivity;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 public class HomeActivity extends AppCompatActivity {
-    private FloatingActionButton fab, option1Fab, option2Fab;
-    private boolean isExpanded = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.home_activity);
 
-        fab = findViewById(R.id.FloatBt);
-        option1Fab = findViewById(R.id.option1);
-        option2Fab = findViewById(R.id.option2);
+        // Initialize buttons
+        Button buttonUretim = findViewById(R.id.button_uretim);
+        Button buttonSevkiyat = findViewById(R.id.button_sevkiyat);
 
-        // action button icin listener
-        fab.setOnClickListener(new View.OnClickListener() {
+        // Set click listener for uretim button
+        buttonUretim.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                toggleFABOptions(); // Toggle
+                // Navigate to UretimActivity
+                startActivity(new Intent(HomeActivity.this, FragmentActivity.class));
             }
         });
 
-        // ilk tus icin listener
-        option1Fab.setOnClickListener(new View.OnClickListener() {
+        // Set click listener for sevkiyat button
+        buttonSevkiyat.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // ReceiptActivity yonlendirir
-                startActivity(new Intent(HomeActivity.this, ReceiptActivity.class));
+                // Navigate to SevkiyatActivity tuşu otomatik olarka sevkiyata çektirebilirim idk
+                startActivity(new Intent(HomeActivity.this, FragmentActivity.class));
             }
         });
-    }
-
-    // acilip kapanma (illusion) animasyonunu halleden fonksiyon
-    private void toggleFABOptions() {
-        if (!isExpanded) {
-            option1Fab.setVisibility(View.VISIBLE);
-            option2Fab.setVisibility(View.VISIBLE);
-        } else {
-            option1Fab.setVisibility(View.GONE);
-            option2Fab.setVisibility(View.GONE);
-        }
-
-        isExpanded = !isExpanded; // Toggle expanded state
     }
 }

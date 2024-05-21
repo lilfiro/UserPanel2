@@ -20,7 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ReceiptIslem extends Fragment implements QuantityDialogFragment.QuantityDialogListener {
+public class FragmentIslem extends Fragment implements QuantityDialogFragment.QuantityDialogListener {
 
     private static final String DB_URL = DatabaseHelper.DB_URL;
     private static final String DB_USER = DatabaseHelper.DB_USER;
@@ -32,15 +32,15 @@ public class ReceiptIslem extends Fragment implements QuantityDialogFragment.Qua
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+            Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.receipt_islem, container, false);
 
         retrieveItemListButton = rootView.findViewById(R.id.retrieveItemListButton);
         textViewSummary = rootView.findViewById(R.id.textViewSummary);
 
-        // Set onClickListener for the retrieveItemListButton
+        // // click listener
         retrieveItemListButton.setOnClickListener(v -> {
-            // Retrieve item list from database asynchronously
+            // Item listesini veritabanından eşzamansız olarak alır
             new FetchItemListTask().execute();
         });
 
@@ -70,7 +70,7 @@ public class ReceiptIslem extends Fragment implements QuantityDialogFragment.Qua
 
         @Override
         protected void onPostExecute(List<String> itemList) {
-            // Show the bottom sheet dialog with the retrieved item list
+            // Item listesinin bulunduğu alt sayfa kutusunu gösterir
             ItemListBottomSheetDialogFragment bottomSheetDialogFragment = new ItemListBottomSheetDialogFragment();
             Bundle args = new Bundle();
             args.putStringArrayList("itemList", new ArrayList<>(itemList));
@@ -79,29 +79,29 @@ public class ReceiptIslem extends Fragment implements QuantityDialogFragment.Qua
         }
     }
 
-    // Pass selectedItemsMap to QuantityDialogFragment
+    // SeçilenItemsMap'i QuantityDialogFragment'e iletir
     public void showQuantityPopup(String itemName) {
         QuantityDialogFragment quantityDialogFragment = QuantityDialogFragment.newInstance(itemName, selectedItemsMap);
-        quantityDialogFragment.setQuantityDialogListener(this);
+        quantityDialogFragment.setQuantityDialogListener(this); // Set the listener
         quantityDialogFragment.show(getChildFragmentManager(), quantityDialogFragment.getTag());
     }
 
-    // Update summary method
+    // özeti günceller
     protected void updateSummary() {
-        // Update the summary with the selected items and quantities
+        // seçilen ürünler ve miktarlarla birlikte güncelleme yapar
         StringBuilder summary = new StringBuilder();
         for (Map.Entry<String, Integer> entry : selectedItemsMap.entrySet()) {
             summary.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
         }
-        // Set the summary text to the TextView
+        // text view elementine sunar
         textViewSummary.setText(summary.toString());
     }
 
     @Override
     public void onQuantityConfirmed(String itemName, int quantity) {
-        // Update the selectedItemsMap with the new quantity
+        // SeçilenItemsMap'i yeni miktarla güncelle
         selectedItemsMap.put(itemName, quantity);
-        // Update the summary
+        // özeti günceller
         updateSummary();
     }
 }
