@@ -39,7 +39,7 @@ public class LoginActivity extends AppCompatActivity {
                             Toast.makeText(LoginActivity.this, "Giriş Başarılı", Toast.LENGTH_SHORT).show();
                             Intent intent = new Intent(LoginActivity.this, HomeActivity.class);
                             startActivity(intent);
-                            finish(); // Optional: LoginActivity'ye donmemek icin kapatilabilir
+                            finish(); // Optional: LoginActivity'ye donmemek icin kapatilir
                         } else {
                             Toast.makeText(LoginActivity.this, "Geçersiz Giriş", Toast.LENGTH_SHORT).show();
                         }

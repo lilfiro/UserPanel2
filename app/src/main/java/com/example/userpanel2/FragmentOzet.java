@@ -10,10 +10,10 @@ import android.view.ViewGroup;
 
 /**
  * A simple {@link Fragment} subclass.
- * Use the {@link ReceiptOzet#newInstance} factory method to
+ * Use the {@link FragmentOzet#newInstance} factory method to
  * create an instance of this fragment.
  */
-public class ReceiptOzet extends Fragment {
+public class FragmentOzet extends Fragment {
 
     // TODO: Rename parameter arguments, choose names that match
     // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
@@ -24,7 +24,7 @@ public class ReceiptOzet extends Fragment {
     private String mParam1;
     private String mParam2;
 
-    public ReceiptOzet() {
+    public FragmentOzet() {
         // Required empty public constructor
     }
 
@@ -37,8 +37,8 @@ public class ReceiptOzet extends Fragment {
      * @return A new instance of fragment ThirdFragment.
      */
     // TODO: Rename and change types and number of parameters
-    public static ReceiptOzet newInstance(String param1, String param2) {
-        ReceiptOzet fragment = new ReceiptOzet();
+    public static FragmentOzet newInstance(String param1, String param2) {
+        FragmentOzet fragment = new FragmentOzet();
         Bundle args = new Bundle();
         args.putString(ARG_PARAM1, param1);
         args.putString(ARG_PARAM2, param2);
