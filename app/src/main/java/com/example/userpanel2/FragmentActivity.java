@@ -10,7 +10,7 @@ public class FragmentActivity extends androidx.fragment.app.FragmentActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.receipt_activity);
+        setContentView(R.layout.receipt_main_activity);
 
         TabLayout tabLayout = findViewById(R.id.tab_layout);
         ViewPager2 viewPager = findViewById(R.id.view_pager);
