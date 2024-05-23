@@ -43,7 +43,6 @@ public class FragmentGiris extends Fragment {
         receiptWarehouseSpinner = rootView.findViewById(R.id.receiptWarehouseSpinner);
         receiptIDText = rootView.findViewById(R.id.receiptIDText);
         desc1Text = rootView.findViewById(R.id.desc1Text);
-        desc2Text = rootView.findViewById(R.id.desc2Text);
         saveButton = rootView.findViewById(R.id.saveButton);
 
         // spinner elementinin kullanacagi secenekleri arrays.xml degerler dosyasindan çeker
@@ -95,40 +94,37 @@ public class FragmentGiris extends Fragment {
         receiptDateText.setText(currentDateAndTime);
 
         // UI elementlerinden verileri alır
+        String receiptID = receiptIDText.getText().toString();
         String receiptType = receiptTypeSpinner.getSelectedItem().toString();
         String receiptDate = receiptDateText.getText().toString();
         String receiptWarehouse = receiptWarehouseSpinner.getSelectedItem().toString();
-        String receiptID = receiptIDText.getText().toString();
         String desc1 = desc1Text.getText().toString();
-        String desc2 = desc2Text.getText().toString();
 
         // verilerini db kaydeder
-        saveToDatabase(receiptType, receiptDate, receiptWarehouse, receiptID, desc1, desc2);
+        saveToDatabase(receiptID, receiptType, receiptDate, receiptWarehouse, desc1);
     }
 
-    private void saveToDatabase(String receiptType, String receiptDate, String receiptWarehouse, String receiptID, String desc1, String desc2) {
-        new SaveReceiptTask().execute(receiptType, receiptDate, receiptWarehouse, receiptID, desc1, desc2);
+    private void saveToDatabase(String receiptID, String receiptType, String receiptDate, String receiptWarehouse, String desc1) {
+        new SaveReceiptTask().execute(receiptID, receiptType, receiptDate, receiptWarehouse, desc1);
     }
 
     private class SaveReceiptTask extends AsyncTask<String, Void, Void> {
         @Override
         protected Void doInBackground(String... params) {
-            String receiptType = params[0];
-            String receiptDate = params[1];
-            String receiptWarehouse = params[2];
-            String receiptID = params[3];
+            String receiptID = params[0];
+            String receiptType = params[1];
+            String receiptDate = params[2];
+            String receiptWarehouse = params[3];
             String desc1 = params[4];
-            String desc2 = params[5];
 
             try (Connection connection = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
-                String sql = "INSERT INTO Receipts (ReceiptType, ReceiptDate, ReceiptWarehouse, ReceiptID, Description1, Description2) VALUES (?, ?, ?, ?, ?, ?)";
+                String sql = "INSERT INTO Receipts (receiptID, receiptType, receiptDate, receiptWarehouse, receiptDescription) VALUES (?, ?, ?, ?, ?)";
                 try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                    statement.setString(1, receiptType);
-                    statement.setString(2, receiptDate);
-                    statement.setString(3, receiptWarehouse);
-                    statement.setString(4, receiptID);
+                    statement.setString(1, receiptID);
+                    statement.setString(2, receiptType);
+                    statement.setString(3, receiptDate);
+                    statement.setString(4, receiptWarehouse);
                     statement.setString(5, desc1);
-                    statement.setString(6, desc2);
                     statement.executeUpdate();
                 }
             } catch (SQLException e) {

@@ -10,13 +10,13 @@ import android.widget.EditText;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.fragment.app.Fragment;
+import androidx.fragment.app.DialogFragment;
 
-public class QRCodeDialogFragment extends Fragment {
+public class QRCodeDialogFragment extends DialogFragment {
 
-    private static final String ARG_ITEM_NAME = "item_name";
-    private static final String ARG_ITEM_QUANTITY = "item_quantity";
-    private static final String ARG_ITEM_DESCRIPTION = "item_description";
+    private static final String ARG_NAME = "name";
+    private static final String ARG_QUANTITY = "quantity";
+    private static final String ARG_DESCRIPTION = "description";
 
     private EditText editTextItemName;
     private EditText editTextItemQuantity;
@@ -24,12 +24,12 @@ public class QRCodeDialogFragment extends Fragment {
     private Button buttonConfirm;
     private Button buttonCancel;
 
-    public static QRCodeDialogFragment newInstance(String itemName, int itemQuantity, String itemDescription) {
+    public static QRCodeDialogFragment newInstance(String name, int quantity, String description) {
         QRCodeDialogFragment fragment = new QRCodeDialogFragment();
         Bundle args = new Bundle();
-        args.putString(ARG_ITEM_NAME, itemName);
-        args.putInt(ARG_ITEM_QUANTITY, itemQuantity);
-        args.putString(ARG_ITEM_DESCRIPTION, itemDescription);
+        args.putString(ARG_NAME, name);
+        args.putInt(ARG_QUANTITY, quantity);
+        args.putString(ARG_DESCRIPTION, description);
         fragment.setArguments(args);
         return fragment;
     }
@@ -48,9 +48,13 @@ public class QRCodeDialogFragment extends Fragment {
         buttonCancel = view.findViewById(R.id.buttonCancel);
 
         if (getArguments() != null) {
-            editTextItemName.setText(getArguments().getString(ARG_ITEM_NAME));
-            editTextItemQuantity.setText(String.valueOf(getArguments().getInt(ARG_ITEM_QUANTITY)));
-            editTextItemDescription.setText(getArguments().getString(ARG_ITEM_DESCRIPTION));
+            String name = getArguments().getString(ARG_NAME);
+            int quantity = getArguments().getInt(ARG_QUANTITY);
+            String description = getArguments().getString(ARG_DESCRIPTION);
+
+            editTextItemName.setText(name);
+            editTextItemQuantity.setText(String.valueOf(quantity));
+            editTextItemDescription.setText(description);
         }
 
         buttonConfirm.setOnClickListener(new View.OnClickListener() {
@@ -65,16 +69,16 @@ public class QRCodeDialogFragment extends Fragment {
                             editTextItemDescription.getText().toString()
                     );
                 }
-                // Close the popup
-                requireActivity().getSupportFragmentManager().beginTransaction().remove(QRCodeDialogFragment.this).commit();
+                // Close the dialog
+                dismiss();
             }
         });
 
         buttonCancel.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // Close the popup
-                requireActivity().getSupportFragmentManager().beginTransaction().remove(QRCodeDialogFragment.this).commit();
+                // Close the dialog
+                dismiss();
             }
         });
 

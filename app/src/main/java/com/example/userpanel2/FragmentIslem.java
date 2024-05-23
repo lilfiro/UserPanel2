@@ -17,6 +17,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 
 import com.journeyapps.barcodescanner.ScanContract;
 import com.journeyapps.barcodescanner.ScanOptions;
@@ -26,6 +27,8 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class FragmentIslem extends Fragment {
 
@@ -96,34 +99,48 @@ public class FragmentIslem extends Fragment {
         }
     });
 
-
     private void processQRCodeContent(String qrContent) {
         Log.d("FragmentIslem", "processQRCodeContent: QR code content processed: " + qrContent);
-        // Add this log statement to check if the method is invoked
         Log.d("FragmentIslem", "processQRCodeContent: Calling showQRCodeResultDialog method");
 
+        // Extract the actual item code from the QR content
+        String actualItemCode = extractItemCode(qrContent);
+        Log.d("FragmentIslem", "processQRCodeContent: Extracted item code: " + actualItemCode);
+
         // Initialize the item object using FetchItemDetailsTask
-        new FetchItemDetailsTask().execute(qrContent);
+        new FetchItemDetailsTask().execute(actualItemCode);
     }
 
-    private class FetchItemDetailsTask extends AsyncTask<String, Void, Item> {
+    private String extractItemCode(String qrContent) {
+        // Assuming the actual item code is the last part of the QR content after spaces and metadata
+        String[] parts = qrContent.split("\\s+");  // Split by whitespace
+        return parts[parts.length - 1];  // Return the last part
+    }
+
+    private class FetchItemDetailsTask extends AsyncTask<String, Void, List<Item>> {
 
         @Override
-        protected Item doInBackground(String... params) {
-            String qrContent = params[0];
-            Item item = null;
+        protected List<Item> doInBackground(String... params) {
+            String barcode = params[0];
+            List<Item> items = new ArrayList<>();
 
             try (Connection connection = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
-                String sql = "SELECT * FROM Items WHERE itemCode = ?";
+                Log.d("FetchItemDetailsTask", "Database connection established to URL: " + DB_URL);
+
+                String sql = "SELECT * FROM Items WHERE barcode = ?";
                 try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                    statement.setString(1, qrContent);
+                    statement.setString(1, barcode);
+                    Log.d("FetchItemDetailsTask", "PreparedStatement created with query: " + sql + " and barcode: " + barcode);
+
                     try (ResultSet resultSet = statement.executeQuery()) {
-                        if (resultSet.next()) {
-                            item = new Item();
+                        Log.d("FetchItemDetailsTask", "Query executed, processing result set");
+                        while (resultSet.next()) {
+                            Item item = new Item();
                             item.setName(resultSet.getString("itemName"));
-                            item.setQuantity(resultSet.getInt("yearOfManufacture")); // Assuming this is the quantity field
-                            item.setDescription(resultSet.getString("material")); // Assuming this is the description field
-                            // Retrieve other fields as needed
+                            item.setQuantity(resultSet.getInt("yearOfManufacture"));
+                            item.setDescription(resultSet.getString("material"));
+                            // Add other fields as necessary
+                            items.add(item);
                         }
                     }
                 }
@@ -131,36 +148,40 @@ public class FragmentIslem extends Fragment {
                 e.printStackTrace();
             }
 
-            return item;
+            if (items.isEmpty()) {
+                Log.e("FetchItemDetailsTask", "Item not found in the database.");
+            }
+
+            return items;
         }
 
         @Override
-        protected void onPostExecute(Item item) {
-            if (item != null) {
-                // Pass the item object to the showQRCodeResultDialog method
-                showQRCodeResultDialog(item);
+        protected void onPostExecute(List<Item> items) {
+            if (!items.isEmpty()) {
+                // Pass the first item or let the user choose
+                showQRCodeResultDialog(items.get(0));
             } else {
                 qrResultTextView.setText("Item not found in the database.");
             }
         }
     }
+
     private void showQRCodeResultDialog(Item item) {
         if (item != null) {
-            Log.d("FragmentIslem", "showQRCodeResultDialog called");
-            Log.d("FragmentIslem", "showQRCodeResultDialog: Creating QRCodeDialogFragment");
+            Log.d("FragmentIslem", "showQRCodeResultDialog called with item: " +
+                    "Name: " + item.getName() + ", Quantity: " + item.getQuantity() + ", Description: " + item.getDescription());
+
             QRCodeDialogFragment dialogFragment = QRCodeDialogFragment.newInstance(
                     item.getName(),
                     item.getQuantity(),
                     item.getDescription()
             );
 
-            // Use getChildFragmentManager() to obtain the FragmentManager for nested fragments
-            getChildFragmentManager()
-                    .beginTransaction()
+            FragmentManager fragmentManager = requireActivity().getSupportFragmentManager();
+            fragmentManager.beginTransaction()
                     .add(R.id.fragment_container_view, dialogFragment, "fragment_qr_code_dialog")
                     .addToBackStack(null)
                     .commit();
-
             Log.d("FragmentIslem", "showQRCodeResultDialog: Fragment transaction committed");
         } else {
             Log.e("FragmentIslem", "showQRCodeResultDialog: Item object is null");
@@ -168,12 +189,7 @@ public class FragmentIslem extends Fragment {
     }
 
     public void onQRCodeResultConfirmed(String itemName, int itemQuantity, String itemDescription) {
-        // Update the UI with the confirmed item details
-        // For example, you can update the EditText fields
-        // editTextItemName.setText(itemName);
-        // editTextItemQuantity.setText(String.valueOf(itemQuantity));
-        // editTextItemDescription.setText(itemDescription);
-
+        Log.d("FragmentIslem", "onQRCodeResultConfirmed: Name: " + itemName + ", Quantity: " + itemQuantity + ", Description: " + itemDescription);
         // Save the details to the ReceiptDetails table
         saveToReceiptDetails(itemName, itemQuantity, itemDescription);
     }
@@ -201,9 +217,10 @@ public class FragmentIslem extends Fragment {
                     statement.setInt(3, itemQuantity);
                     statement.setString(4, itemDescription);
                     statement.executeUpdate();
+                    Log.d("FragmentIslem", "SaveReceiptDetailsTask: Details saved: Name: " + itemName + ", Quantity: " + itemQuantity + ", Description: " + itemDescription);
                 }
             } catch (SQLException e) {
-                e.printStackTrace();
+                Log.e("FragmentIslem", "Error saving receipt details", e);
             }
 
             return null;
