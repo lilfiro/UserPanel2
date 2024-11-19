@@ -1,191 +1,85 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
+    android:layout_height="match_parent"
+    android:padding="16dp">
 
     <TextView
         android:id="@+id/receiptText"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="2dp"
-        android:layout_marginTop="25dp"
-        android:layout_marginEnd="2dp"
-        android:layout_marginBottom="5dp"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
         android:text="Fiş"
         android:textSize="20sp"
-        app:layout_constraintBottom_toTopOf="@+id/receiptTypeSpinner"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <Button
-        android:id="@+id/saveButton"
-        android:layout_width="0dp"
-        android:layout_height="48dp"
-        android:layout_marginStart="304dp"
-        android:layout_marginTop="20dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="161dp"
-        android:text="Save"
-        android:visibility="visible"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/desc4Text"
-        app:layout_constraintVertical_bias="0.0"
-        tools:visibility="visible" />
+        android:layout_marginTop="40dp" />
 
     <Spinner
         android:id="@+id/receiptTypeSpinner"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="2dp"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_below="@id/receiptText"
         android:layout_marginTop="10dp"
-        android:layout_marginEnd="2dp"
-        android:layout_marginBottom="5dp"
         android:background="#FFFFFF"
-        android:entries="@array/receipt_types"
-        android:minHeight="48dp"
-        android:spinnerMode="dialog"
-        app:layout_constraintBottom_toTopOf="@+id/receiptDateText"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/receiptText" />
+        android:entries="@array/receipt_types" />
 
     <EditText
-        android:id="@+id/receiptDateText"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="2dp"
+        android:id="@+id/receiptDateTextEdit"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_below="@id/receiptTypeSpinner"
         android:layout_marginTop="10dp"
-        android:layout_marginEnd="2dp"
-        android:layout_marginBottom="5dp"
         android:background="#FFFFFF"
-        android:clickable="true"
-        android:focusable="false"
-        android:hint="Tarih giriniz"
-        android:minHeight="48dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/receiptTypeSpinner" />
-
+        android:ems="10"
+        android:text="aaa"
+        android:inputType="text" />
 
     <EditText
         android:id="@+id/receiptIDText"
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="48dp"
-        android:layout_marginStart="2dp"
+        android:layout_below="@id/receiptDateTextEdit"
         android:layout_marginTop="10dp"
-        android:layout_marginEnd="2dp"
-        android:layout_marginBottom="5dp"
         android:background="#FFFFFF"
         android:ems="10"
         android:focusable="false"
-        android:inputType="none"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/receiptDateText"
-        tools:ignore="SpeakableTextPresentCheck" />
-
-    <EditText
-        android:id="@+id/receiptAddressText"
-        android:layout_width="0dp"
-        android:layout_height="48dp"
-        android:layout_marginStart="2dp"
-        android:layout_marginTop="10dp"
-        android:layout_marginEnd="2dp"
-        android:layout_marginBottom="5dp"
-        android:background="#FFFFFF"
-        android:ems="10"
-        android:hint="Adres giriniz"
-        android:inputType="textPostalAddress"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/receiptWarehouseSpinner"
-        tools:ignore="SpeakableTextPresentCheck" />
+        android:inputType="none" />
 
     <Spinner
         android:id="@+id/receiptWarehouseSpinner"
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="48dp"
-        android:layout_marginStart="2dp"
+        android:layout_below="@id/receiptIDText"
         android:layout_marginTop="10dp"
-        android:layout_marginEnd="2dp"
-        android:layout_marginBottom="5dp"
         android:background="#FFFFFF"
-        android:entries="@array/receipt_warehouses"
-        android:minHeight="48dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/receiptIDText" />
+        android:entries="@array/receipt_warehouses" />
 
     <EditText
         android:id="@+id/desc1Text"
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="48dp"
-        android:layout_marginStart="2dp"
+        android:layout_below="@id/receiptWarehouseSpinner"
         android:layout_marginTop="10dp"
-        android:layout_marginEnd="2dp"
-        android:layout_marginBottom="5dp"
         android:background="#FFFFFF"
         android:ems="10"
         android:hint="Açıklama1"
-        android:inputType="text"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/receiptAddressText" />
+        android:inputType="text" />
 
     <EditText
         android:id="@+id/desc2Text"
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="48dp"
-        android:layout_marginStart="2dp"
+        android:layout_below="@id/desc1Text"
         android:layout_marginTop="10dp"
-        android:layout_marginEnd="2dp"
-        android:layout_marginBottom="5dp"
         android:background="#FFFFFF"
         android:ems="10"
         android:hint="Açıklama2"
-        android:inputType="text"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/desc1Text" />
+        android:inputType="text" />
 
-    <EditText
-        android:id="@+id/desc3Text"
-        android:layout_width="0dp"
-        android:layout_height="48dp"
-        android:layout_marginStart="2dp"
-        android:layout_marginTop="10dp"
-        android:layout_marginEnd="2dp"
-        android:layout_marginBottom="5dp"
-        android:background="#FFFFFF"
-        android:ems="10"
-        android:hint="Açıklama3"
-        android:inputType="text"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/desc2Text" />
+    <Button
+        android:id="@+id/saveButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/desc2Text"
+        android:layout_marginTop="20dp"
+        android:text="Kaydet" />
 
-    <EditText
-        android:id="@+id/desc4Text"
-        android:layout_width="0dp"
-        android:layout_height="48dp"
-        android:layout_marginStart="2dp"
-        android:layout_marginTop="10dp"
-        android:layout_marginEnd="2dp"
-        android:background="#FFFFFF"
-        android:ems="10"
-        android:hint="Açıklama4"
-        android:inputType="text"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/desc3Text" />
-
-
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+</RelativeLayout>
