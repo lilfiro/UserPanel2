@@ -18,11 +18,8 @@ public class QRCodeDialogFragment extends DialogFragment {
     private static final String ARG_QUANTITY = "quantity";
     private static final String ARG_DESCRIPTION = "description";
 
-    private EditText editTextItemName;
-    private EditText editTextItemQuantity;
-    private EditText editTextItemDescription;
-    private Button buttonConfirm;
-    private Button buttonCancel;
+    private EditText editTextItemName, editTextItemQuantity, editTextItemDescription;
+    private Button buttonConfirm, buttonCancel;
 
     public static QRCodeDialogFragment newInstance(String name, int quantity, String description) {
         QRCodeDialogFragment fragment = new QRCodeDialogFragment();

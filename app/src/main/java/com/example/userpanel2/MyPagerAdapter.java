@@ -1,4 +1,5 @@
 package com.example.userpanel2;
+
 import java.util.ArrayList;
 import java.util.List;
 import androidx.annotation.NonNull;
@@ -15,6 +16,7 @@ public class MyPagerAdapter extends FragmentStateAdapter {
         super(fragmentActivity);
     }
 
+    // Modify to accept Fragments, not Activities
     public void addFragment(Fragment fragment, String title) {
         fragmentList.add(fragment);
         fragmentTitles.add(title);
@@ -30,7 +32,6 @@ public class MyPagerAdapter extends FragmentStateAdapter {
     public int getItemCount() {
         return fragmentList.size();
     }
-
 
     public CharSequence getPageTitle(int position) {
         return fragmentTitles.get(position);

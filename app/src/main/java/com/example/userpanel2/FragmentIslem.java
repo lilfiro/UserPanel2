@@ -85,7 +85,7 @@ public class FragmentIslem extends Fragment {
     private void startQRCodeScanner() {
         ScanOptions options = new ScanOptions();
         options.setPrompt("Scan a QR code");
-        options.setCameraId(1);  // Use a specific camera of the device
+        options.setCameraId(0);  // Use a specific camera of the device
         options.setBeepEnabled(true);
         options.setBarcodeImageEnabled(true);
         barcodeLauncher.launch(options);
@@ -138,7 +138,7 @@ public class FragmentIslem extends Fragment {
                             Item item = new Item();
                             item.setName(resultSet.getString("itemName"));
                             item.setQuantity(resultSet.getInt("yearOfManufacture"));
-                            item.setDescription(resultSet.getString("material"));
+                            item.setDescription(resultSet.getString("barcode"));
                             // Add other fields as necessary
                             items.add(item);
                         }

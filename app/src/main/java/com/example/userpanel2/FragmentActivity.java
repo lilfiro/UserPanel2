@@ -15,9 +15,8 @@ public class FragmentActivity extends androidx.fragment.app.FragmentActivity {
         TabLayout tabLayout = findViewById(R.id.tab_layout);
         ViewPager2 viewPager = findViewById(R.id.view_pager);
 
-        // Create the adapter with getSupportFragmentManager()
+        // Create the adapter with FragmentActivity
         MyPagerAdapter adapter = new MyPagerAdapter(this);
-
 
         // Add fragments to the adapter
         adapter.addFragment(new FragmentGiris(), "Giriş");

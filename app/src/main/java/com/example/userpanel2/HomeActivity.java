@@ -30,8 +30,8 @@ public class HomeActivity extends AppCompatActivity {
         buttonSevkiyat.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // Navigate to SevkiyatActivity tuşu otomatik olarka sevkiyata çektirebilirim idk
-                startActivity(new Intent(HomeActivity.this, FragmentActivity.class));
+                // Navigate to SevkiyatActivity
+                startActivity(new Intent(HomeActivity.this, SevkiyatActivity.class));
             }
         });
     }

@@ -39,7 +39,7 @@ public class FragmentGiris extends Fragment {
 
         // Initialize UI elements
         receiptTypeSpinner = rootView.findViewById(R.id.receiptTypeSpinner);
-        receiptDateText = rootView.findViewById(R.id.receiptDateText);
+        receiptDateText = rootView.findViewById(R.id.receiptDateTextEdit);
         receiptWarehouseSpinner = rootView.findViewById(R.id.receiptWarehouseSpinner);
         receiptIDText = rootView.findViewById(R.id.receiptIDText);
         desc1Text = rootView.findViewById(R.id.desc1Text);
