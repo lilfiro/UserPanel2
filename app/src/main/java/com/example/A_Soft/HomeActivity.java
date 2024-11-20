@@ -1,4 +1,4 @@
-package com.example.userpanel2;
+package com.example.A_Soft;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -31,7 +31,7 @@ public class HomeActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 // Navigate to SevkiyatActivity
-                startActivity(new Intent(HomeActivity.this, SevkiyatActivity.class));
+                startActivity(new Intent(HomeActivity.this, SevkiyatMainActivity.class));
             }
         });
     }

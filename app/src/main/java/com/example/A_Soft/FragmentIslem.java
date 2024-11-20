@@ -1,4 +1,4 @@
-package com.example.userpanel2;
+package com.example.A_Soft;
 
 import android.Manifest;
 import android.content.pm.PackageManager;

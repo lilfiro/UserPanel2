@@ -1,4 +1,4 @@
-package com.example.userpanel2;
+package com.example.A_Soft;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -25,7 +25,7 @@ public class UpcomingSchedulesAdapter extends RecyclerView.Adapter<UpcomingSched
 
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.sevkiyat_invoices, parent, false);
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.sevkiyat_invoices_list, parent, false);
         return new ViewHolder(view);
     }
 

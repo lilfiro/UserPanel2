@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "UserPanel2"
+rootProject.name = "A_Soft"
 include(":app")
