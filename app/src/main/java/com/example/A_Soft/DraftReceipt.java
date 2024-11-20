@@ -1,4 +1,4 @@
-package com.example.userpanel2;
+package com.example.A_Soft;
 
 public class DraftReceipt {
     private String date;

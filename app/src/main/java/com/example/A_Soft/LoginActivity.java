@@ -1,4 +1,4 @@
-package com.example.userpanel2;
+package com.example.A_Soft;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -7,7 +7,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
-import android.annotation.SuppressLint;
+
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageView;

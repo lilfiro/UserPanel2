@@ -1,4 +1,4 @@
-package com.example.userpanel2.ui.theme
+package com.example.A_Soft.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
