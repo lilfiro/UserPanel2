@@ -12,7 +12,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
-
+import java.sql.ResultSetMetaData;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 
@@ -20,24 +20,26 @@ import com.google.android.gms.vision.barcode.Barcode;
 import com.google.android.gms.vision.CameraSource;
 import com.google.android.gms.vision.Detector;
 import com.google.android.gms.vision.barcode.BarcodeDetector;
-
+import java.util.stream.Collectors;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-
 public class Sevkiyat_QR extends Fragment {
     private static final String TAG = "Sevkiyat_QR";
-    private static final Pattern QR_SERIAL_PATTERN = Pattern.compile("KAREKODNO_([^|]+)");
+    private static final String ARG_FICHENO = "FICHENO";
 
     private CameraSourcePreview cameraPreview;
     private CameraSource cameraSource;
@@ -46,6 +48,15 @@ public class Sevkiyat_QR extends Fragment {
     private TextView scanStatusTextView;
     private Button confirmReceiptButton;
     private String currentReceiptNo;
+
+    // Static factory method (optional, but can be helpful)
+    public static Sevkiyat_QR newInstance(String ficheNo) {
+        Sevkiyat_QR fragment = new Sevkiyat_QR();
+        Bundle args = new Bundle();
+        args.putString(ARG_FICHENO, ficheNo);
+        fragment.setArguments(args);
+        return fragment;
+    }
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -58,7 +69,18 @@ public class Sevkiyat_QR extends Fragment {
 
         // Get receipt number from arguments
         if (getArguments() != null) {
-            currentReceiptNo = getArguments().getString("FICHENO");
+            currentReceiptNo = getArguments().getString(ARG_FICHENO);
+
+            // Add logging and validation
+            Log.d(TAG, "Received FICHENO: " + currentReceiptNo);
+
+            if (currentReceiptNo == null || currentReceiptNo.trim().isEmpty()) {
+                showToast("Invalid receipt number");
+            }
+        } else {
+            // Fallback or error handling
+            showToast("No receipt number provided");
+            currentReceiptNo = ""; // Prevent null pointer exceptions
         }
 
         executorService = Executors.newSingleThreadExecutor();
@@ -70,7 +92,6 @@ public class Sevkiyat_QR extends Fragment {
 
         return view;
     }
-
     private void setupConfirmButton() {
         confirmReceiptButton.setOnClickListener(v -> {
             if (itemManager.areAllItemsScanned()) {
@@ -111,7 +132,7 @@ public class Sevkiyat_QR extends Fragment {
             }
         });
     }
-
+    private static final Pattern QR_SERIAL_PATTERN = Pattern.compile("KAREKODNO_([^|]+)");
     private void processQRCode(String qrCodeData) {
         try {
             Matcher serialMatcher = QR_SERIAL_PATTERN.matcher(qrCodeData);
@@ -120,7 +141,7 @@ public class Sevkiyat_QR extends Fragment {
                 return;
             }
 
-            String itemSerialNumber = serialMatcher.group(1);
+            String itemSerialNumber = qrCodeData; // Use full QR code for processing
 
             executorService.submit(() -> {
                 ReceiptItemManager.ScanResult result = itemManager.processScannedItem(itemSerialNumber);
@@ -134,15 +155,17 @@ public class Sevkiyat_QR extends Fragment {
     }
 
     private void handleScanResult(ReceiptItemManager.ScanResult result, String serialNumber) {
+        String itemCode = itemManager.extractItemCodeFromQR(serialNumber);
         switch (result) {
             case ALREADY_SCANNED:
-                showToast("Item already scanned: " + serialNumber);
+                showToast("Item already scanned: " + itemCode);
                 break;
             case ITEM_NOT_IN_RECEIPT:
-                showToast("Item not in receipt: " + serialNumber);
+                showToast("Item not in receipt: " + itemCode +
+                        "\nAvailable codes: " + itemManager.getAvailableItemCodes());
                 break;
             case SUCCESS:
-                showToast("Item scanned successfully: " + serialNumber);
+                showToast("Item scanned successfully: " + itemCode);
                 updateScanStatus();
                 break;
         }
@@ -215,6 +238,7 @@ public class Sevkiyat_QR extends Fragment {
 }
 
 class ReceiptItemManager {
+    private static final String TAG = "ReceiptItemManager";
     private final String receiptNo;
     private final Map<String, Boolean> itemsToScan = new HashMap<>();
     private final Map<String, String> scannedItems = new HashMap<>();
@@ -228,103 +252,163 @@ class ReceiptItemManager {
     public ReceiptItemManager(String receiptNo) {
         this.receiptNo = receiptNo;
     }
-
     public void loadReceiptItems() {
         try (Connection conn = DatabaseConnectionManager.getConnection()) {
-            // Split by '/' and then format it properly
-            String[] ficheNos = receiptNo.split("/");
-            StringBuilder formattedFicheNo = new StringBuilder();
-            for (String fiche : ficheNos) {
-                if (formattedFicheNo.length() > 0) {
-                    formattedFicheNo.append("','"); // Add a separator between fiche numbers
-                }
-                formattedFicheNo.append(fiche.trim()); // Trim whitespace and append ficheNo
+            // Verify connection is working
+            if (conn == null) {
+                Log.e(TAG, "Database connection is null");
+                return;
             }
 
-            // Add quotes around each ficheNo
-            String quotedFicheNo = "'" + formattedFicheNo.toString() + "'";
+            // Split by '/' and trim each fiche number
+            String[] ficheNos = receiptNo.split("/");
+            Log.d(TAG, "Attempting to load items for receipt numbers: " + Arrays.toString(ficheNos));
+
+            // Clear previous items before loading
+            itemsToScan.clear();
+            scannedItems.clear();
 
             // Dynamically build table names using the table suffix
-            String tableSuffix = "001"; // You might want to make this dynamic
+            String tableSuffix = "001"; // Consider making this dynamic
             String tablePrefix = String.format("LG_%s", tableSuffix);
             String tableName = tablePrefix + "_01_STFICHE";
             String stLineTable = tablePrefix + "_01_STLINE";
             String itemsTable = tablePrefix + "_ITEMS";
+
+            // Prepare the IN clause with trimmed fiche numbers
+            String ficheNosList = Arrays.stream(ficheNos)
+                    .map(String::trim)
+                    .map(no -> "'" + no + "'")
+                    .collect(Collectors.joining(","));
+
+            // Log detailed database connection information
+            Log.d(TAG, "Database Tables:");
+            Log.d(TAG, "Table Name: " + tableName);
+            Log.d(TAG, "StLine Table: " + stLineTable);
+            Log.d(TAG, "Items Table: " + itemsTable);
+            Log.d(TAG, "Fiche Numbers List: " + ficheNosList);
 
             String query = String.format(
                     "SELECT DISTINCT " +
                             "ST.FICHENO AS FicheNo, " +
                             "IT.CODE AS ItemCode, " +
                             "SL.AMOUNT AS Quantity, " +
-                            "IT.NAME AS ItemName " +
+                            "IT.NAME AS ItemName, " +
+                            "ST.TRCODE, " +
+                            "ST.BILLED " +
                             "FROM TIGERDB.dbo.%s ST " +
                             "INNER JOIN TIGERDB.dbo.%s SL ON SL.STFICHEREF = ST.LOGICALREF " +
                             "INNER JOIN TIGERDB.dbo.%s IT ON IT.LOGICALREF = SL.STOCKREF " +
-                            "WHERE ST.FICHENO IN (%s) AND ST.TRCODE = 8 AND ST.BILLED = 0",
-                    tableName, stLineTable, itemsTable, quotedFicheNo
+                            "WHERE ST.FICHENO IN (%s) " +
+                            "AND ST.TRCODE = 8 " +
+                            "AND ST.BILLED = 0",
+                    tableName, stLineTable, itemsTable, ficheNosList
             );
+
+            Log.d(TAG, "Full SQL Query: " + query);
 
             try (PreparedStatement stmt = conn.prepareStatement(query)) {
                 try (ResultSet rs = stmt.executeQuery()) {
-                    StringBuilder logMessage = new StringBuilder("Loaded Items:\n");
+                    // Check if ResultSet is empty
+                    if (!rs.isBeforeFirst()) {
+                        Log.e(TAG, "No results returned from query");
+
+                        // Additional diagnostic query to check table and data existence
+                        String diagnosticQuery = String.format(
+                                "SELECT COUNT(*) AS RecordCount " +
+                                        "FROM TIGERDB.dbo.%s ST " +
+                                        "WHERE ST.FICHENO IN (%s)",
+                                tableName, ficheNosList
+                        );
+
+                        try (PreparedStatement diagStmt = conn.prepareStatement(diagnosticQuery);
+                             ResultSet diagRs = diagStmt.executeQuery()) {
+
+                            if (diagRs.next()) {
+                                int recordCount = diagRs.getInt("RecordCount");
+                                Log.d(TAG, "Diagnostic Record Count: " + recordCount);
+                            }
+                        }
+                    }
+
                     while (rs.next()) {
                         String itemCode = rs.getString("ItemCode");
-                        String ficheNo = rs.getString("FicheNo");
+                        String currentFicheNo = rs.getString("FicheNo");
                         String itemName = rs.getString("ItemName");
                         double quantity = rs.getDouble("Quantity");
+                        int trCode = rs.getInt("TRCODE");
+                        int billed = rs.getInt("BILLED");
 
-                        logMessage.append(String.format(
-                                "Fiche No: %s, Item Code: %s, Item Name: %s, Quantity: %.2f\n",
-                                ficheNo, itemCode, itemName, quantity
+                        Log.d(TAG, String.format(
+                                "Found Item - Fiche: %s, Code: %s, Name: %s, Quantity: %.2f, TrCode: %d, Billed: %d",
+                                currentFicheNo, itemCode, itemName, quantity, trCode, billed
                         ));
 
                         // Use item code as the key to track scanning
                         itemsToScan.put(itemCode, false);
                     }
 
-                    // Log detailed information about loaded items
-                    Log.d("ReceiptItemManager", logMessage.toString());
-                    Log.d("ReceiptItemManager", "Total unique items loaded: " + itemsToScan.size());
+                    // Log the final items found
+                    Log.d(TAG, "Total unique items loaded: " + itemsToScan.size());
+                    for (String itemCode : itemsToScan.keySet()) {
+                        Log.d(TAG, "Loaded item code: " + itemCode);
+                    }
 
-                    // If no items found, log additional debugging information
                     if (itemsToScan.isEmpty()) {
-                        Log.e("ReceiptItemManager", "No items found for receipt: " + receiptNo);
-                        Log.e("ReceiptItemManager", "Quoted Fiche No: " + quotedFicheNo);
+                        Log.e(TAG, "No items found for receipt: " + receiptNo);
                     }
                 }
+            } catch (SQLException e) {
+                Log.e(TAG, "Error executing query for Fiche Numbers: " + receiptNo, e);
+                e.printStackTrace();
             }
         } catch (SQLException e) {
-            Log.e("ReceiptItemManager", "Error loading receipt items", e);
+            Log.e(TAG, "Error connecting to database", e);
             e.printStackTrace();
         }
     }
-    public ScanResult processScannedItem(String serialNumber) {
-        Log.d("ReceiptItemManager", "Processing scanned item: " + serialNumber);
-        Log.d("ReceiptItemManager", "Available items to scan: " + itemsToScan.keySet());
 
-        // Check if the scanned item is in the list of items to scan
+    public ScanResult processScannedItem(String serialNumber) {
+        Log.d(TAG, "Processing scanned item: " + serialNumber);
+        Log.d(TAG, "Full available items to scan: " + itemsToScan.keySet());
+
+        // Check if the scanned item is already scanned
         if (scannedItems.containsKey(serialNumber)) {
-            Log.d("ReceiptItemManager", "Item already scanned");
+            Log.d(TAG, "Item already scanned");
             return ScanResult.ALREADY_SCANNED;
         }
 
-        boolean itemFound = false;
-        for (String itemCode : itemsToScan.keySet()) {
-            if (serialNumber.contains(itemCode)) {
-                itemFound = true;
-                itemsToScan.put(itemCode, true);
-                scannedItems.put(serialNumber, receiptNo);
-                break;
-            }
+        // Extract item code from QR code
+        String extractedItemCode = extractItemCodeFromQR(serialNumber);
+        Log.d(TAG, "Extracted Item Code: " + extractedItemCode);
+
+        boolean itemFound = itemsToScan.containsKey(extractedItemCode);
+
+        if (itemFound) {
+            itemsToScan.put(extractedItemCode, true);
+            scannedItems.put(serialNumber, receiptNo);
+            Log.d(TAG, "Item matched: " + extractedItemCode);
+            return ScanResult.SUCCESS;
         }
 
-        if (!itemFound) {
-            Log.d("ReceiptItemManager", "Item not found in receipt");
-            return ScanResult.ITEM_NOT_IN_RECEIPT;
-        }
+        Log.d(TAG, "Item not found in receipt. Extracted Code: " + extractedItemCode);
 
-        return ScanResult.SUCCESS;
+        // Additional debugging: print out all item codes to help understand what's happening
+        Log.d(TAG, "All possible item codes: " + itemsToScan.keySet());
+
+        return ScanResult.ITEM_NOT_IN_RECEIPT;
     }
+    public String extractItemCodeFromQR(String qrCode) {
+        // Extract item code from QR code
+        // Assumes format like ||KAREKODNO_561007ENT22000401|...
+        int startIndex = qrCode.indexOf("KAREKODNO_") + 10;
+        int endIndex = qrCode.indexOf("|", startIndex);
+        if (startIndex >= 10 && endIndex > startIndex) {
+            return qrCode.substring(startIndex, endIndex);
+        }
+        return qrCode;
+    }
+
     public boolean areAllItemsScanned() {
         return !itemsToScan.containsValue(false);
     }
@@ -335,6 +419,10 @@ class ReceiptItemManager {
 
     public int getTotalItems() {
         return itemsToScan.size();
+    }
+
+    public String getAvailableItemCodes() {
+        return itemsToScan.keySet().toString();
     }
 }
 
@@ -389,13 +477,31 @@ class CameraSourcePreview extends ViewGroup {
         surfaceView.layout(0, 0, width, height);
     }
 }
-// Centralized Database Connection Manager
+
 class DatabaseConnectionManager {
     private static final String DB_URL = DatabaseHelper.DB_URL;
     private static final String DB_USER = DatabaseHelper.DB_USER;
     private static final String DB_PASSWORD = DatabaseHelper.DB_PASSWORD;
 
-    public static Connection getConnection() throws SQLException {
+    // Static method that returns a Connection
+    public static Connection getSafeConnection() throws SQLException {
         return DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+    }
+
+    // Optional: If you want to include error handling within the method
+    public static Connection getConnection() {
+        try {
+            Log.d("DatabaseConnectionManager", "Attempting to connect with URL: " + DB_URL);
+            Log.d("DatabaseConnectionManager", "Attempting to connect with User: " + DB_USER);
+            Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+            Log.d("DatabaseConnectionManager", "Connection successful");
+            return conn;
+        } catch (SQLException e) {
+            Log.e("DatabaseConnectionManager", "Connection error details:", e);
+            Log.e("DatabaseConnectionManager", "Error message: " + e.getMessage());
+            Log.e("DatabaseConnectionManager", "SQL State: " + e.getSQLState());
+            Log.e("DatabaseConnectionManager", "Error Code: " + e.getErrorCode());
+            return null;
+        }
     }
 }
