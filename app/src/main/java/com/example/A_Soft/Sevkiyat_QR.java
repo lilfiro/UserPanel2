@@ -40,16 +40,14 @@ import java.util.regex.Pattern;
 public class Sevkiyat_QR extends Fragment {
     private static final String TAG = "Sevkiyat_QR";
     private static final String ARG_FICHENO = "FICHENO";
-
+    private String currentReceiptNo;
     private CameraSourcePreview cameraPreview;
     private CameraSource cameraSource;
     private ExecutorService executorService;
     private ReceiptItemManager itemManager;
     private TextView scanStatusTextView;
     private Button confirmReceiptButton;
-    private String currentReceiptNo;
 
-    // Static factory method (optional, but can be helpful)
     public static Sevkiyat_QR newInstance(String ficheNo) {
         Sevkiyat_QR fragment = new Sevkiyat_QR();
         Bundle args = new Bundle();
@@ -57,42 +55,44 @@ public class Sevkiyat_QR extends Fragment {
         fragment.setArguments(args);
         return fragment;
     }
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        if (getArguments() != null) {
+            currentReceiptNo = getArguments().getString(ARG_FICHENO);
+            Log.d(TAG, "Received FICHENO in onCreate: " + currentReceiptNo);
+        }
+    }
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.sevkiyat_receipt_qr, container, false);
 
-        // Initialize views
-        cameraPreview = view.findViewById(R.id.camera_preview);
-        scanStatusTextView = view.findViewById(R.id.scan_status);
-        confirmReceiptButton = view.findViewById(R.id.confirm_receipt_button);
+        // Initialize views and setup
+        initializeViews(view);
 
-        // Get receipt number from arguments
-        if (getArguments() != null) {
-            currentReceiptNo = getArguments().getString(ARG_FICHENO);
-
-            // Add logging and validation
-            Log.d(TAG, "Received FICHENO: " + currentReceiptNo);
-
-            if (currentReceiptNo == null || currentReceiptNo.trim().isEmpty()) {
-                showToast("Invalid receipt number");
-            }
-        } else {
-            // Fallback or error handling
-            showToast("No receipt number provided");
-            currentReceiptNo = ""; // Prevent null pointer exceptions
+        // Verify receipt number
+        if (currentReceiptNo == null || currentReceiptNo.trim().isEmpty()) {
+            showToast("Invalid receipt number");
+            Log.e(TAG, "No valid receipt number provided");
+            return view;
         }
 
-        executorService = Executors.newSingleThreadExecutor();
-        itemManager = new ReceiptItemManager(currentReceiptNo);
+        Log.d(TAG, "Setting up QR scanner for receipt: " + currentReceiptNo);
 
+        // Initialize managers and setup camera
+        setupManagers();
         setupBarcodeDetector();
-        setupConfirmButton();
         loadReceiptItems();
 
         return view;
     }
-    private void setupConfirmButton() {
+    private void initializeViews(View view) {
+        cameraPreview = view.findViewById(R.id.camera_preview);
+        scanStatusTextView = view.findViewById(R.id.scan_status);
+        confirmReceiptButton = view.findViewById(R.id.confirm_receipt_button);
+
+        // Setup confirm button
         confirmReceiptButton.setOnClickListener(v -> {
             if (itemManager.areAllItemsScanned()) {
                 updateReceiptStatus();
@@ -101,7 +101,10 @@ public class Sevkiyat_QR extends Fragment {
             }
         });
     }
-
+    private void setupManagers() {
+        executorService = Executors.newSingleThreadExecutor();
+        itemManager = new ReceiptItemManager(currentReceiptNo);
+    }
     private void setupBarcodeDetector() {
         BarcodeDetector barcodeDetector = new BarcodeDetector.Builder(requireContext())
                 .setBarcodeFormats(Barcode.QR_CODE)
