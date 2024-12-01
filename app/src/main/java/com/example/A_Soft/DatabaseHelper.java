@@ -10,11 +10,9 @@ import java.sql.SQLException;
 
 public class DatabaseHelper {
 
-    // DB Connection settings kullanılacak database'e göre değiştirilecek.
-    protected static final String DB_URL = "jdbc:jtds:sqlserver://192.168.1.108:1433/AndroidTest";
+    protected static final String DB_URL = "jdbc:jtds:sqlserver://192.168.1.41:1433/AndroidTest";
     protected static final String DB_USER = "androidemu";
     protected static final String DB_PASSWORD = "AndroidEmu123";
-
     private final Handler handler;
 
     public DatabaseHelper() {

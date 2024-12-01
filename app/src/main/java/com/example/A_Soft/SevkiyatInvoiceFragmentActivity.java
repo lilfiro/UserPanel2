@@ -29,7 +29,7 @@ public class SevkiyatInvoiceFragmentActivity extends androidx.fragment.app.Fragm
         sevkiyatOzetFragment.setArguments(bundle);
 
         // Add fragments to adapter (Sevkiyat_QR will be created with ficheNo in adapter)
-        adapter.addFragment(sevkiyatOzetFragment, "Gelen Faturalar");
+        adapter.addFragment(sevkiyatOzetFragment, "Sevkiyat Plan");
         adapter.addFragment(new Sevkiyat_QR(), "Karekod Okutma");
 
         // Set up ViewPager2

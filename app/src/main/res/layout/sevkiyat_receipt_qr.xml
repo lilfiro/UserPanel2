@@ -6,7 +6,7 @@
     <com.example.A_Soft.CameraSourcePreview
         android:id="@+id/camera_preview"
         android:layout_width="match_parent"
-        android:layout_height="638dp" />
+        android:layout_height="466dp" />
 
     <TextView
         android:id="@+id/notificationText"

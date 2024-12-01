@@ -1,5 +1,6 @@
 package com.example.A_Soft;
 
+import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
 import android.util.AttributeSet;
@@ -20,13 +21,13 @@ import com.google.android.gms.vision.barcode.Barcode;
 import com.google.android.gms.vision.CameraSource;
 import com.google.android.gms.vision.Detector;
 import com.google.android.gms.vision.barcode.BarcodeDetector;
-import java.util.stream.Collectors;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -37,16 +38,19 @@ import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+
 public class Sevkiyat_QR extends Fragment {
     private static final String TAG = "Sevkiyat_QR";
     private static final String ARG_FICHENO = "FICHENO";
+    private static final Pattern QR_SERIAL_PATTERN = Pattern.compile("KAREKODNO_([^|]+)");
+
     private String currentReceiptNo;
     private CameraSourcePreview cameraPreview;
-    private CameraSource cameraSource;
-    private ExecutorService executorService;
     private ReceiptItemManager itemManager;
     private TextView scanStatusTextView;
     private Button confirmReceiptButton;
+    private boolean isPausedForConfirmation = false;
+    private ExecutorService executorService;
 
     public static Sevkiyat_QR newInstance(String ficheNo) {
         Sevkiyat_QR fragment = new Sevkiyat_QR();
@@ -55,67 +59,68 @@ public class Sevkiyat_QR extends Fragment {
         fragment.setArguments(args);
         return fragment;
     }
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (getArguments() != null) {
-            currentReceiptNo = getArguments().getString(ARG_FICHENO);
-            Log.d(TAG, "Received FICHENO in onCreate: " + currentReceiptNo);
-        }
+        currentReceiptNo = getArguments() != null ?
+                getArguments().getString(ARG_FICHENO) : null;
     }
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.sevkiyat_receipt_qr, container, false);
 
-        // Initialize views and setup
-        initializeViews(view);
+        // Validate receipt number
+        if (isInvalidReceiptNumber()) return view;
 
-        // Verify receipt number
-        if (currentReceiptNo == null || currentReceiptNo.trim().isEmpty()) {
-            showToast("Invalid receipt number");
-            Log.e(TAG, "No valid receipt number provided");
-            return view;
-        }
-
-        Log.d(TAG, "Setting up QR scanner for receipt: " + currentReceiptNo);
-
-        // Initialize managers and setup camera
-        setupManagers();
-        setupBarcodeDetector();
+        initializeComponents(view);
+        setupBarcodeDetection();
         loadReceiptItems();
 
         return view;
     }
-    private void initializeViews(View view) {
+
+    private boolean isInvalidReceiptNumber() {
+        if (currentReceiptNo == null || currentReceiptNo.trim().isEmpty()) {
+            showToast("Geçersiz fiş numarası");
+            Log.e(TAG, "No valid receipt number provided");
+            return true;
+        }
+        return false;
+    }
+
+    private void initializeComponents(View view) {
+        // Initialize views
         cameraPreview = view.findViewById(R.id.camera_preview);
         scanStatusTextView = view.findViewById(R.id.scan_status);
         confirmReceiptButton = view.findViewById(R.id.confirm_receipt_button);
+
+        // Setup executor and item manager
+        executorService = Executors.newSingleThreadExecutor();
+        itemManager = new ReceiptItemManager(currentReceiptNo);
 
         // Setup confirm button
         confirmReceiptButton.setOnClickListener(v -> {
             if (itemManager.areAllItemsScanned()) {
                 updateReceiptStatus();
             } else {
-                showToast("All items must be scanned before confirming");
+                showToast("Tamamlanmadan önce tüm ürünler taratılmalıdır.");
             }
         });
     }
-    private void setupManagers() {
-        executorService = Executors.newSingleThreadExecutor();
-        itemManager = new ReceiptItemManager(currentReceiptNo);
-    }
-    private void setupBarcodeDetector() {
+
+    private void setupBarcodeDetection() {
         BarcodeDetector barcodeDetector = new BarcodeDetector.Builder(requireContext())
                 .setBarcodeFormats(Barcode.QR_CODE)
                 .build();
 
         if (!barcodeDetector.isOperational()) {
-            showToast("Barcode detection is not operational");
+            showToast("Barkod algılayıcısı başlatılamadı");
             return;
         }
 
-        cameraSource = new CameraSource.Builder(requireContext(), barcodeDetector)
+        CameraSource cameraSource = new CameraSource.Builder(requireContext(), barcodeDetector)
                 .setRequestedPreviewSize(640, 480)
                 .setAutoFocusEnabled(true)
                 .build();
@@ -135,51 +140,92 @@ public class Sevkiyat_QR extends Fragment {
             }
         });
     }
-    private static final Pattern QR_SERIAL_PATTERN = Pattern.compile("KAREKODNO_([^|]+)");
+
+    private long lastScanTime = 0;
+    private static final long SCAN_DEBOUNCE_INTERVAL = 2000; // 2 seconds
+
     private void processQRCode(String qrCodeData) {
+        long currentTime = System.currentTimeMillis();
+
+        // Debounce mechanism
+        if (currentTime - lastScanTime < SCAN_DEBOUNCE_INTERVAL) {
+            return;
+        }
+
+        if (isPausedForConfirmation)
+            return;
+
         try {
-            Matcher serialMatcher = QR_SERIAL_PATTERN.matcher(qrCodeData);
-            if (!serialMatcher.find()) {
-                showToast("Invalid QR code format");
+            if (!QR_SERIAL_PATTERN.matcher(qrCodeData).find()) {
+                showToast("Geçersiz Kare kod");
                 return;
             }
 
-            String itemSerialNumber = qrCodeData; // Use full QR code for processing
+            lastScanTime = currentTime; // Update last scan time
 
             executorService.submit(() -> {
-                ReceiptItemManager.ScanResult result = itemManager.processScannedItem(itemSerialNumber);
-                requireActivity().runOnUiThread(() -> handleScanResult(result, itemSerialNumber));
+                ReceiptItemManager.ScanResult result = itemManager.cacheScannedItem(qrCodeData);
+                requireActivity().runOnUiThread(() -> {
+                    switch (result) {
+                        case SUCCESS:
+                            showItemConfirmationDialog(qrCodeData);
+                            break;
+                        case ALREADY_SCANNED:
+                        case ITEM_NOT_IN_RECEIPT:
+                            showToast(result == ReceiptItemManager.ScanResult.ALREADY_SCANNED
+                                    ? "Bu ürün zaten tarandı."
+                                    : "Bu ürün sevkiyat planında yok.");
+                            break;
+                    }
+                    updateScanStatus();
+                });
             });
-
         } catch (Exception e) {
             Log.e(TAG, "QR Code processing error", e);
-            showToast("Error processing QR code");
+            showToast("Karekod okunurken hata oluştu");
         }
+    }
+
+    private void showItemConfirmationDialog(String serialNumber) {
+        isPausedForConfirmation = true;
+        String itemCode = itemManager.extractItemCodeFromQR(serialNumber);
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Ürün okundu")
+                .setMessage("Ürünler: " + itemCode)
+                .setPositiveButton("Tamam", (dialog, which) -> {
+                    isPausedForConfirmation = false;
+                    updateScanStatus();
+                    confirmReceiptButton.setEnabled(itemManager.areAllItemsScanned());
+                })
+                .setCancelable(false)
+                .show();
     }
 
     private void handleScanResult(ReceiptItemManager.ScanResult result, String serialNumber) {
         String itemCode = itemManager.extractItemCodeFromQR(serialNumber);
         switch (result) {
             case ALREADY_SCANNED:
-                showToast("Item already scanned: " + itemCode);
+                showToast("Bu ürün zaten tarandı: " + itemCode);
                 break;
             case ITEM_NOT_IN_RECEIPT:
-                showToast("Item not in receipt: " + itemCode +
-                        "\nAvailable codes: " + itemManager.getAvailableItemCodes());
+                showToast("Bu ürün sevkiyat planında bulunmuyor: " + itemCode);
                 break;
             case SUCCESS:
-                showToast("Item scanned successfully: " + itemCode);
+                showToast("Ürün başarılı bir şekilde okundu: " + itemCode);
                 updateScanStatus();
+                confirmReceiptButton.setEnabled(itemManager.areAllItemsScanned());
                 break;
         }
     }
 
+
+
     private void updateScanStatus() {
-        String status = String.format("Scanned: %d/%d items",
+        String status = String.format("Okunacak ürünler: %d/%d",
                 itemManager.getScannedCount(),
                 itemManager.getTotalItems());
         scanStatusTextView.setText(status);
-
         confirmReceiptButton.setEnabled(itemManager.areAllItemsScanned());
     }
 
@@ -192,25 +238,27 @@ public class Sevkiyat_QR extends Fragment {
 
     private void updateReceiptStatus() {
         executorService.submit(() -> {
+            boolean itemsInserted = itemManager.bulkInsertScannedItems();
+
             try (Connection conn = DatabaseConnectionManager.getConnection()) {
-                String updateQuery = "UPDATE ANATOLIASOFT.dbo.AST_OPERATION SET STATUS = 1 WHERE OPR_FICHENO = ?";
+                String updateQuery = "UPDATE ANATOLIASOFT.dbo.AST_SHIPPLAN SET STATUS = 1 WHERE SLIPNR = ?";
                 try (PreparedStatement stmt = conn.prepareStatement(updateQuery)) {
                     stmt.setString(1, currentReceiptNo);
                     int affected = stmt.executeUpdate();
 
                     requireActivity().runOnUiThread(() -> {
-                        if (affected > 0) {
-                            showToast("Receipt confirmed successfully");
-                            requireActivity().onBackPressed(); // Return to previous screen
+                        if (affected > 0 && itemsInserted) {
+                            showToast("Sevkiyat tamamlandı.");
+                            requireActivity().onBackPressed();
                         } else {
-                            showToast("Failed to confirm receipt");
+                            showToast("Sevkiyat tamamlanamadı.");
                         }
                     });
                 }
-            } catch (SQLException e) {
-                Log.e(TAG, "Error updating receipt status", e);
-                requireActivity().runOnUiThread(() ->
-                        showToast("Error confirming receipt"));
+                } catch (SQLException e) {
+                    Log.e(TAG, "Error updating receipt status", e);
+                    requireActivity().runOnUiThread(() ->
+                            showToast("Sevkiyat tamamlanırken bir hata meydana geldi (SQL)."));
             }
         });
     }
@@ -239,66 +287,47 @@ public class Sevkiyat_QR extends Fragment {
         }
     }
 }
-
 class ReceiptItemManager {
     private static final String TAG = "ReceiptItemManager";
     private final String receiptNo;
     private final Map<String, Boolean> itemsToScan = new HashMap<>();
     private final Map<String, String> scannedItems = new HashMap<>();
+    private final List<ScannedQRItem> qrCodeCache = new ArrayList<>();
 
+    // Single enum definition
     public enum ScanResult {
-        SUCCESS,
-        ALREADY_SCANNED,
-        ITEM_NOT_IN_RECEIPT
+        SUCCESS, ALREADY_SCANNED, ITEM_NOT_IN_RECEIPT
     }
 
     public ReceiptItemManager(String receiptNo) {
         this.receiptNo = receiptNo;
     }
+
     public void loadReceiptItems() {
         try (Connection conn = DatabaseConnectionManager.getConnection()) {
-            // Verify connection is working
             if (conn == null) {
                 Log.e(TAG, "Database connection is null");
                 return;
             }
 
-            // Split by '/' and trim each fiche number
             String[] ficheNos = receiptNo.split("/");
-            Log.d(TAG, "Attempting to load items for receipt numbers: " + Arrays.toString(ficheNos));
-
-            // Clear previous items before loading
             itemsToScan.clear();
             scannedItems.clear();
 
-            // Dynamically build table names using the table suffix
-            String tableSuffix = "001"; // Consider making this dynamic
+            String tableSuffix = "001";
             String tablePrefix = String.format("LG_%s", tableSuffix);
             String tableName = tablePrefix + "_01_STFICHE";
             String stLineTable = tablePrefix + "_01_STLINE";
             String itemsTable = tablePrefix + "_ITEMS";
 
-            // Prepare the IN clause with trimmed fiche numbers
             String ficheNosList = Arrays.stream(ficheNos)
-                    .map(String::trim)
-                    .map(no -> "'" + no + "'")
+                    .map(no -> "'" + no.trim() + "'")
                     .collect(Collectors.joining(","));
-
-            // Log detailed database connection information
-            Log.d(TAG, "Database Tables:");
-            Log.d(TAG, "Table Name: " + tableName);
-            Log.d(TAG, "StLine Table: " + stLineTable);
-            Log.d(TAG, "Items Table: " + itemsTable);
-            Log.d(TAG, "Fiche Numbers List: " + ficheNosList);
 
             String query = String.format(
                     "SELECT DISTINCT " +
-                            "ST.FICHENO AS FicheNo, " +
                             "IT.CODE AS ItemCode, " +
-                            "SL.AMOUNT AS Quantity, " +
-                            "IT.NAME AS ItemName, " +
-                            "ST.TRCODE, " +
-                            "ST.BILLED " +
+                            "IT.NAME AS ItemName " +
                             "FROM TIGERDB.dbo.%s ST " +
                             "INNER JOIN TIGERDB.dbo.%s SL ON SL.STFICHEREF = ST.LOGICALREF " +
                             "INNER JOIN TIGERDB.dbo.%s IT ON IT.LOGICALREF = SL.STOCKREF " +
@@ -308,108 +337,33 @@ class ReceiptItemManager {
                     tableName, stLineTable, itemsTable, ficheNosList
             );
 
-            Log.d(TAG, "Full SQL Query: " + query);
+            try (PreparedStatement stmt = conn.prepareStatement(query);
+                 ResultSet rs = stmt.executeQuery()) {
 
-            try (PreparedStatement stmt = conn.prepareStatement(query)) {
-                try (ResultSet rs = stmt.executeQuery()) {
-                    // Check if ResultSet is empty
-                    if (!rs.isBeforeFirst()) {
-                        Log.e(TAG, "No results returned from query");
-
-                        // Additional diagnostic query to check table and data existence
-                        String diagnosticQuery = String.format(
-                                "SELECT COUNT(*) AS RecordCount " +
-                                        "FROM TIGERDB.dbo.%s ST " +
-                                        "WHERE ST.FICHENO IN (%s)",
-                                tableName, ficheNosList
-                        );
-
-                        try (PreparedStatement diagStmt = conn.prepareStatement(diagnosticQuery);
-                             ResultSet diagRs = diagStmt.executeQuery()) {
-
-                            if (diagRs.next()) {
-                                int recordCount = diagRs.getInt("RecordCount");
-                                Log.d(TAG, "Diagnostic Record Count: " + recordCount);
-                            }
-                        }
-                    }
-
-                    while (rs.next()) {
-                        String itemCode = rs.getString("ItemCode");
-                        String currentFicheNo = rs.getString("FicheNo");
-                        String itemName = rs.getString("ItemName");
-                        double quantity = rs.getDouble("Quantity");
-                        int trCode = rs.getInt("TRCODE");
-                        int billed = rs.getInt("BILLED");
-
-                        Log.d(TAG, String.format(
-                                "Found Item - Fiche: %s, Code: %s, Name: %s, Quantity: %.2f, TrCode: %d, Billed: %d",
-                                currentFicheNo, itemCode, itemName, quantity, trCode, billed
-                        ));
-
-                        // Use item code as the key to track scanning
-                        itemsToScan.put(itemCode, false);
-                    }
-
-                    // Log the final items found
-                    Log.d(TAG, "Total unique items loaded: " + itemsToScan.size());
-                    for (String itemCode : itemsToScan.keySet()) {
-                        Log.d(TAG, "Loaded item code: " + itemCode);
-                    }
-
-                    if (itemsToScan.isEmpty()) {
-                        Log.e(TAG, "No items found for receipt: " + receiptNo);
-                    }
+                while (rs.next()) {
+                    String itemCode = rs.getString("ItemCode");
+                    itemsToScan.put(itemCode, false);
                 }
-            } catch (SQLException e) {
-                Log.e(TAG, "Error executing query for Fiche Numbers: " + receiptNo, e);
-                e.printStackTrace();
             }
         } catch (SQLException e) {
-            Log.e(TAG, "Error connecting to database", e);
-            e.printStackTrace();
+            Log.e(TAG, "Error loading receipt items", e);
         }
     }
 
-    public ScanResult processScannedItem(String serialNumber) {
-        Log.d(TAG, "Processing scanned item: " + serialNumber);
-        Log.d(TAG, "Full available items to scan: " + itemsToScan.keySet());
-
-        // Check if the scanned item is already scanned
-        if (scannedItems.containsKey(serialNumber)) {
-            Log.d(TAG, "Item already scanned");
-            return ScanResult.ALREADY_SCANNED;
-        }
-
-        // Extract item code from QR code
-        String extractedItemCode = extractItemCodeFromQR(serialNumber);
-        Log.d(TAG, "Extracted Item Code: " + extractedItemCode);
-
-        boolean itemFound = itemsToScan.containsKey(extractedItemCode);
-
-        if (itemFound) {
-            itemsToScan.put(extractedItemCode, true);
-            scannedItems.put(serialNumber, receiptNo);
-            Log.d(TAG, "Item matched: " + extractedItemCode);
-            return ScanResult.SUCCESS;
-        }
-
-        Log.d(TAG, "Item not found in receipt. Extracted Code: " + extractedItemCode);
-
-        // Additional debugging: print out all item codes to help understand what's happening
-        Log.d(TAG, "All possible item codes: " + itemsToScan.keySet());
-
-        return ScanResult.ITEM_NOT_IN_RECEIPT;
-    }
-    public String extractItemCodeFromQR(String qrCode) {
-        // Extract item code from QR code
-        // Assumes format like ||KAREKODNO_561007ENT22000401|...
-        int startIndex = qrCode.indexOf("KAREKODNO_") + 10;
-        int endIndex = qrCode.indexOf("|", startIndex);
-        if (startIndex >= 10 && endIndex > startIndex) {
-            return qrCode.substring(startIndex, endIndex);
+    private String extractSerialNumber(String qrCode) {
+        int startIndex = qrCode.indexOf("KAREKODNO_");
+        if (startIndex != -1) {
+            int endIndex = qrCode.indexOf("|", startIndex);
+            return endIndex == -1 ? qrCode.substring(startIndex) : qrCode.substring(startIndex, endIndex);
         }
         return qrCode;
+    }
+
+    public String extractItemCodeFromQR(String qrCode) {
+        int lastPipeIndex = qrCode.lastIndexOf("|");
+        return lastPipeIndex != -1 && lastPipeIndex < qrCode.length() - 1
+                ? qrCode.substring(lastPipeIndex + 1).trim()
+                : qrCode.trim();
     }
 
     public boolean areAllItemsScanned() {
@@ -427,8 +381,117 @@ class ReceiptItemManager {
     public String getAvailableItemCodes() {
         return itemsToScan.keySet().toString();
     }
-}
 
+    // New class to represent cached QR items
+    public static class ScannedQRItem {
+        String serialNumber;
+        String itemCode;
+        String orgnr;
+
+        public ScannedQRItem(String serialNumber, String itemCode, String orgnr) {
+            this.serialNumber = serialNumber;
+            this.itemCode = itemCode;
+            this.orgnr = orgnr;
+        }
+    }
+
+    // New method to bulk insert cached QR codes
+    public boolean bulkInsertScannedItems() {
+        if (qrCodeCache.isEmpty()) {
+            return false;
+        }
+
+        try (Connection conn = DatabaseConnectionManager.getConnection()) {
+            // Check if ORGNR exists for this receipt
+            String findOrgnrQuery = "SELECT TOP 1 ORGNR FROM ANATOLIASOFT.dbo.AST_SHIPPLAN " +
+                    "WHERE STATUS = 0 AND SLIPNR = ?";
+            String orgnr = null;
+            try (PreparedStatement orgnrStmt = conn.prepareStatement(findOrgnrQuery)) {
+                orgnrStmt.setString(1, receiptNo);
+                try (ResultSet orgnrRs = orgnrStmt.executeQuery()) {
+                    if (orgnrRs.next()) {
+                        orgnr = orgnrRs.getString("ORGNR");
+                    }
+                }
+            }
+
+            if (orgnr == null) {
+                Log.e(TAG, "No ORGNR found for receipt");
+                return false;
+            }
+
+            // Prepare batch insert
+            String insertQuery = "INSERT INTO ANATOLIASOFT.dbo.AST_SHIPPLAN_QR " +
+                    "(SHP_SERIALNO, SHP_ITEMCODE, SHP_ID) VALUES (?, ?, ?)";
+            try (PreparedStatement insertStmt = conn.prepareStatement(insertQuery)) {
+                for (ScannedQRItem item : qrCodeCache) {
+                    insertStmt.setString(1, item.serialNumber);
+                    insertStmt.setString(2, item.itemCode);
+                    insertStmt.setString(3, orgnr);
+                    insertStmt.addBatch();
+                }
+                insertStmt.executeBatch();
+            }
+
+            // Clear cache after successful insertion
+            qrCodeCache.clear();
+            return true;
+
+        } catch (SQLException e) {
+            Log.e(TAG, "Error bulk inserting scanned items", e);
+            return false;
+        }
+    }
+
+    // Modify to add to cache instead of immediate database check
+    public ScanResult cacheScannedItem(String serialNumber) {
+        try (Connection conn = DatabaseConnectionManager.getConnection()) {
+            String extractedItemCode = extractItemCodeFromQR(serialNumber);
+            String extractedSerialNo = extractSerialNumber(serialNumber);
+
+            // Local cache check first
+            if (scannedItems.containsKey(serialNumber)) {
+                return ScanResult.ALREADY_SCANNED;
+            }
+
+            // Database check for already scanned items
+            String checkScanQuery = "SELECT COUNT(*) AS scan_count FROM ANATOLIASOFT.dbo.AST_SHIPPLAN_QR " +
+                    "WHERE SHP_SERIALNO = ? AND SHP_ITEMCODE = ?";
+            try (PreparedStatement checkStmt = conn.prepareStatement(checkScanQuery)) {
+                checkStmt.setString(1, extractedSerialNo);
+                checkStmt.setString(2, extractedItemCode);
+                try (ResultSet rs = checkStmt.executeQuery()) {
+                    if (rs.next() && rs.getInt("scan_count") > 0) {
+                        return ScanResult.ALREADY_SCANNED;
+                    }
+                }
+            }
+
+            // Check if item is in receipt
+            if (!itemsToScan.containsKey(extractedItemCode)) {
+                return ScanResult.ITEM_NOT_IN_RECEIPT;
+            }
+
+            // Prevent duplicate scans of the same item code
+            if (itemsToScan.get(extractedItemCode)) {
+                return ScanResult.ALREADY_SCANNED;
+            }
+
+            // Add to cache
+            qrCodeCache.add(new ScannedQRItem(extractedSerialNo, extractedItemCode, null));
+
+            // Mark item as scanned locally
+            itemsToScan.put(extractedItemCode, true);
+            scannedItems.put(serialNumber, receiptNo);
+
+            return ScanResult.SUCCESS;
+
+        } catch (SQLException e) {
+            Log.e(TAG, "Error checking scanned item", e);
+            return ScanResult.ITEM_NOT_IN_RECEIPT;
+        }
+    }
+}
 class CameraSourcePreview extends ViewGroup {
     private SurfaceView surfaceView;
     private CameraSource cameraSource;
@@ -461,6 +524,7 @@ class CameraSourcePreview extends ViewGroup {
         if (cameraSource != null) {
             try {
                 cameraSource.start(surfaceView.getHolder());
+                // Kamera açmayı reddederse program patlıyor, düzeltilecek
             } catch (IOException e) {
                 Log.e("CameraPreview", "Error starting camera", e);
             }
@@ -479,17 +543,12 @@ class CameraSourcePreview extends ViewGroup {
         int height = bottom - top;
         surfaceView.layout(0, 0, width, height);
     }
-}
 
+}
 class DatabaseConnectionManager {
     private static final String DB_URL = DatabaseHelper.DB_URL;
     private static final String DB_USER = DatabaseHelper.DB_USER;
     private static final String DB_PASSWORD = DatabaseHelper.DB_PASSWORD;
-
-    // Static method that returns a Connection
-    public static Connection getSafeConnection() throws SQLException {
-        return DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
-    }
 
     // Optional: If you want to include error handling within the method
     public static Connection getConnection() {
