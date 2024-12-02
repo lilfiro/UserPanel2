@@ -23,7 +23,7 @@ public class DatabaseConfigActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.login_activity);
+        setContentView(R.layout.db_settings);
 
         // Initialize DatabaseHelper
         databaseHelper = new DatabaseHelper(this);
@@ -71,7 +71,7 @@ public class DatabaseConfigActivity extends AppCompatActivity {
         // Validate that required fields are not empty
         if (serverAddress.isEmpty() || serverPort.isEmpty() ||
                 username.isEmpty() || firmNumber.isEmpty() || periodNumber.isEmpty()) {
-            Toast.makeText(this, "Please fill in all required fields", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Lütfen tüm alanları doldurun", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -87,7 +87,7 @@ public class DatabaseConfigActivity extends AppCompatActivity {
         );
 
         // Show success message
-        Toast.makeText(this, "Configuration saved successfully", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Yapılandırılma başarılı", Toast.LENGTH_SHORT).show();
 
         // Optionally, finish the activity or do something else
         finish();

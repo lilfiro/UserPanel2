@@ -111,7 +111,7 @@ public class DatabaseHelper {
     // Perform user check with dynamic connection
     private boolean performCheckUser(String checkUsername, String checkPassword) {
         try (Connection connection = getConnection()) {
-            String sql = "SELECT * FROM users WHERE username = ? AND password = ?";
+            String sql = "SELECT * FROM AndroidTest.dbo.users WHERE username = ? AND password = ?";
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, checkUsername);
                 statement.setString(2, checkPassword);
