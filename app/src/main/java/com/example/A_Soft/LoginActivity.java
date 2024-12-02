@@ -16,7 +16,7 @@ import android.widget.TextView;
 public class LoginActivity extends AppCompatActivity {
 
     private EditText usernameEditText, passwordEditText;
-    private Button loginButton;
+    private Button loginButton, settingsButton;
     private DatabaseHelper databaseHelper;
     ImageView imageView;
     TextView textView;
@@ -34,12 +34,16 @@ public class LoginActivity extends AppCompatActivity {
         usernameEditText = findViewById(R.id.usernamelb);
         passwordEditText = findViewById(R.id.passwordlb);
         loginButton = findViewById(R.id.loginbt);
+        settingsButton = findViewById(R.id.settingsbt);
 
-        databaseHelper = new DatabaseHelper();
+        databaseHelper = new DatabaseHelper(this);
 
         loginButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                // Recreate DatabaseHelper to ensure latest config
+                databaseHelper = new DatabaseHelper(LoginActivity.this);
+
                 String username = usernameEditText.getText().toString();
                 String password = passwordEditText.getText().toString();
 
@@ -47,19 +51,23 @@ public class LoginActivity extends AppCompatActivity {
                     @Override
                     public void onUserCheck(boolean userExists) {
                         if (userExists) {
-                            // basarili giriste HomePage yonlendirir
                             Toast.makeText(LoginActivity.this, "Giriş Başarılı", Toast.LENGTH_SHORT).show();
                             Intent intent = new Intent(LoginActivity.this, HomeActivity.class);
                             startActivity(intent);
-                            finish(); // Optional: LoginActivity'ye donmemek icin kapatilir
+                            finish();
                         } else {
                             Toast.makeText(LoginActivity.this, "Geçersiz Giriş", Toast.LENGTH_SHORT).show();
                         }
                     }
                 });
             }
-
-
+        });
+        settingsButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(LoginActivity.this, DatabaseConfigActivity.class);
+                startActivity(intent);
+            }
         });
 
         imageView.setOnTouchListener(new OnSwipeTouchListener(getApplicationContext()) {

@@ -8,9 +8,17 @@ public class Item {
     public Item() {
     }
 
+    // Existing constructor with three parameters
     public Item(String name, int quantity, String description) {
         this.name = name;
         this.quantity = quantity;
+        this.description = description;
+    }
+
+    // New constructor with two parameters
+    public Item(String name, String description) {
+        this.name = name;
+        this.quantity = 0; // Default value for quantity
         this.description = description;
     }
 

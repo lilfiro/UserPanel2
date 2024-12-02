@@ -40,9 +40,9 @@ public class FragmentIslem extends Fragment {
         this.item = newItem;
     }
 
-    private static final String DB_URL = DatabaseHelper.DB_URL;
-    private static final String DB_USER = DatabaseHelper.DB_USER;
-    private static final String DB_PASSWORD = DatabaseHelper.DB_PASSWORD;
+    protected static final String DB_URL = "jdbc:jtds:sqlserver://192.168.1.113:1433/AndroidTest";
+    protected static final String DB_USER = "androidemu";
+    protected static final String DB_PASSWORD = "AndroidEmu123";
 
     private Button qr_button;
     private TextView qrResultTextView;

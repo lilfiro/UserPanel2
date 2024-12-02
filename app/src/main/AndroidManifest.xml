@@ -34,7 +34,7 @@
             android:name=".HomeActivity"
             android:exported="true" />
         <activity
-            android:name=".DatabaseHelper"
+            android:name=".DatabaseConfigActivity"
             android:exported="true" />
         <activity
             android:name=".FragmentActivity"

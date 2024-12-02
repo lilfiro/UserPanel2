@@ -9,14 +9,56 @@
         android:id="@+id/til_server_address"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="SQL Sunucu IP Adresi ve Portu"
+        android:hint="SQL Sunucu Adresi (IP)"
         app:layout_constraintTop_toTopOf="parent">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/et_server_address"
             android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/til_server_port"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:hint="Sunucu Portu"
+        app:layout_constraintTop_toBottomOf="@id/til_server_address">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_server_port"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="jdbc:jtds:sqlserver://192.168.1.41:1433/AndroidTest"/>
+            android:inputType="number" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/til_TigerDatabase_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:hint="TIGER Database Adı"
+        app:layout_constraintTop_toBottomOf="@id/til_server_port">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_TigerDatabase_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/til_AnatoliaSoft_Database_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:hint="ANATOLIASOFT Database Adı"
+        app:layout_constraintTop_toBottomOf="@id/til_TigerDatabase_name">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_AnatoliaSoft_Database_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <com.google.android.material.textfield.TextInputLayout
@@ -24,14 +66,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:hint="Username"
-        app:layout_constraintTop_toBottomOf="@id/til_server_address">
+        android:hint="SQL Kullanıcı Adı"
+        app:layout_constraintTop_toBottomOf="@id/til_AnatoliaSoft_Database_name">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/et_username"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="androidemu"/>
+            android:layout_height="wrap_content" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <com.google.android.material.textfield.TextInputLayout
@@ -39,7 +80,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:hint="Password"
+        android:hint="Parola"
         app:layout_constraintTop_toBottomOf="@id/til_username"
         app:passwordToggleEnabled="true">
 
@@ -47,16 +88,45 @@
             android:id="@+id/et_password"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textPassword"
-            android:text="AndroidEmu123"/>
+            android:inputType="textPassword" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/til_firm_number"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:hint="Firma Numarası"
+        app:layout_constraintTop_toBottomOf="@id/til_password">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_firm_number"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/til_period_number"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:hint="Dönem Numarası"
+        app:layout_constraintTop_toBottomOf="@id/til_firm_number">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_period_number"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <Button
         android:id="@+id/btn_save_config"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Save Configuration"
-        app:layout_constraintTop_toBottomOf="@id/til_password"/>
+        android:layout_marginTop="24dp"
+        android:text="Ayarları Kaydet"
+        app:layout_constraintTop_toBottomOf="@id/til_period_number" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
