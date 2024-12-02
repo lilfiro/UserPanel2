@@ -9,13 +9,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class DatabaseConfigActivity extends AppCompatActivity {
-    public EditText etServerAddress;
-    public EditText etServerPort;
-    public EditText etDatabaseName;
-    public EditText etUsername;
-    public EditText etPassword;
-    public EditText etFirmNumber;
-    public EditText etPeriodNumber;
+    public EditText etServerAddress, etServerPort, etDatabaseName, etUsername, etPassword, etFirmNumber, etPeriodNumber;
     public Button btnSaveConfig;
 
     public DatabaseHelper databaseHelper;
