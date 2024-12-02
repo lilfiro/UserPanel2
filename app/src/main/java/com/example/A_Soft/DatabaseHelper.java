@@ -17,21 +17,17 @@ public class DatabaseHelper {
     private static final String PREF_NAME = "DatabaseConfig";
     private static final String KEY_SERVER_ADDRESS = "server_address";
     private static final String KEY_SERVER_PORT = "server_port";
-    private static final String KEY_DB_NAME = "database_name";
+    private static final String KEY_TIGER_DB_NAME = "Tiger_Database_name";
+    private static final String KEY_ANATOLIASOFT_DB_NAME = "AnatoliaSoft_Database_name";
     private static final String KEY_USERNAME = "db_username";
     private static final String KEY_PASSWORD = "db_password";
     private static final String KEY_FIRM_NUMBER = "firm_number";
     private static final String KEY_PERIOD_NUMBER = "period_number";
 
     // Database configuration
-    private String serverAddress;
-    private String serverPort;
-    private String databaseName;
-    private String username;
-    private String password;
-    private String firmNumber;
-    private String periodNumber;
-
+    private String serverAddress, serverPort, tigerDatabaseName,
+            anatoliaSoftDatabaseName, username, password,
+            firmNumber, periodNumber;
     private final Handler handler;
     private final Context context;
 
@@ -43,60 +39,113 @@ public class DatabaseHelper {
 
     // Save database configuration to SharedPreferences
     public void saveConfiguration(String serverAddress, String serverPort,
-                                  String databaseName, String username,
-                                  String password, String firmNumber,
-                                  String periodNumber) {
+                                  String tigerDatabaseName, String anatoliaSoftDatabaseName,
+                                  String username, String password,
+                                  String firmNumber, String periodNumber) {
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = prefs.edit();
 
         editor.putString(KEY_SERVER_ADDRESS, serverAddress);
         editor.putString(KEY_SERVER_PORT, serverPort);
-        editor.putString(KEY_DB_NAME, databaseName);
+        editor.putString(KEY_TIGER_DB_NAME, tigerDatabaseName);
+        editor.putString(KEY_ANATOLIASOFT_DB_NAME, anatoliaSoftDatabaseName);
         editor.putString(KEY_USERNAME, username);
         editor.putString(KEY_PASSWORD, password);
         editor.putString(KEY_FIRM_NUMBER, firmNumber);
         editor.putString(KEY_PERIOD_NUMBER, periodNumber);
 
-        editor.apply();
+        editor.commit(); // Changed from apply()
 
         // Update current instance variables
         loadDatabaseConfig();
     }
-
     // Load database configuration from SharedPreferences
     private void loadDatabaseConfig() {
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
 
         serverAddress = prefs.getString(KEY_SERVER_ADDRESS, "192.168.1.113");
         serverPort = prefs.getString(KEY_SERVER_PORT, "1433");
-        databaseName = prefs.getString(KEY_DB_NAME, "AndroidTest");
+        tigerDatabaseName = prefs.getString(KEY_TIGER_DB_NAME, "TIGERDB");
+        anatoliaSoftDatabaseName = prefs.getString(KEY_ANATOLIASOFT_DB_NAME, "ANATOLIASOFT");
         username = prefs.getString(KEY_USERNAME, "androidemu");
         password = prefs.getString(KEY_PASSWORD, "AndroidEmu123");
         firmNumber = prefs.getString(KEY_FIRM_NUMBER, "001");
         periodNumber = prefs.getString(KEY_PERIOD_NUMBER, "01");
     }
 
-    // Generate dynamic JDBC URL
-    String getJdbcUrl() {
+    // Generate dynamic JDBC URL for Tiger Database
+    public String getTigerJdbcUrl() {
         return String.format("jdbc:jtds:sqlserver://%s:%s/%s",
-                serverAddress, serverPort, databaseName);
+                serverAddress, serverPort, tigerDatabaseName);
     }
 
-    // Get connection with dynamically loaded credentials
-    private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(getJdbcUrl(), username, password);
+    // Generate dynamic JDBC URL for Anatoliasoft Database
+    public String getAnatoliaSoftJdbcUrl() {
+        return String.format("jdbc:jtds:sqlserver://%s:%s/%s",
+                serverAddress, serverPort, anatoliaSoftDatabaseName);
     }
 
-    // Dynamic table and schema generation methods
+    // Get connection for Tiger Database
+    public Connection getTigerConnection() throws SQLException {
+        return DriverManager.getConnection(getTigerJdbcUrl(), username, password);
+    }
+
+    // Get connection for Anatoliasoft Database
+    public Connection getAnatoliaSoftConnection() throws SQLException {
+        return DriverManager.getConnection(getAnatoliaSoftJdbcUrl(), username, password);
+    }
+
+    // Dynamic table name generation for Tiger Database
     public String getTigerDbTableName(String baseTableName) {
         return String.format("TIGERDB.dbo.LG_%s_%s_%s", firmNumber, periodNumber, baseTableName);
     }
 
+    public String getTigerDbItemsTableName(String baseTableName) {
+        return String.format("TIGERDB.dbo.LG_%s_%s", firmNumber, baseTableName);
+    }
+
+    // Dynamic table name generation for Anatoliasoft Database
     public String getAnatoliaSoftTableName(String baseTableName) {
         return String.format("ANATOLIASOFT.dbo.%s", baseTableName);
     }
 
-    // User check method with dynamic connection
+    // Generic method to execute a query on Tiger Database
+    public ResultSet executeTigerQuery(String query, String... params) throws SQLException {
+        try (Connection connection = getTigerConnection();
+             PreparedStatement statement = connection.prepareStatement(query)) {
+
+            for (int i = 0; i < params.length; i++) {
+                statement.setString(i + 1, params[i]);
+            }
+
+            return statement.executeQuery();
+        }
+    }
+
+    // Generic method to execute a query on Anatoliasoft Database
+    public ResultSet executeAnatoliaSoftQuery(String query, String... params) throws SQLException {
+        try (Connection connection = getAnatoliaSoftConnection();
+             PreparedStatement statement = connection.prepareStatement(query)) {
+
+            for (int i = 0; i < params.length; i++) {
+                statement.setString(i + 1, params[i]);
+            }
+
+            return statement.executeQuery();
+        }
+    }
+    public int executeAnatoliaSoftUpdate(String query, String... params) throws SQLException {
+        try (Connection connection = getAnatoliaSoftConnection();
+             PreparedStatement statement = connection.prepareStatement(query)) {
+
+            for (int i = 0; i < params.length; i++) {
+                statement.setString(i + 1, params[i]);
+            }
+
+            return statement.executeUpdate();
+        }
+    }
+    // User check method with dynamic connection (kept from previous implementation)
     public void checkUser(String username, String password, OnUserCheckListener listener) {
         new Thread(() -> {
             boolean userExists = performCheckUser(username, password);
@@ -110,7 +159,7 @@ public class DatabaseHelper {
 
     // Perform user check with dynamic connection
     private boolean performCheckUser(String checkUsername, String checkPassword) {
-        try (Connection connection = getConnection()) {
+        try (Connection connection = getAnatoliaSoftConnection()) {
             String sql = "SELECT * FROM AndroidTest.dbo.users WHERE username = ? AND password = ?";
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, checkUsername);
@@ -128,12 +177,12 @@ public class DatabaseHelper {
     // Getters for configuration values
     public String getServerAddress() { return serverAddress; }
     public String getServerPort() { return serverPort; }
-    public String getDatabaseName() { return databaseName; }
+    public String getTigerDatabaseName() { return tigerDatabaseName; }
+    public String getAnatoliaSoftDatabaseName() { return anatoliaSoftDatabaseName; }
     public String getUsername() { return username; }
     public String getFirmNumber() { return firmNumber; }
     public String getPeriodNumber() { return periodNumber; }
-
-    public String getPassword() {return password;    }
+    public String getPassword() { return password; }
 
     public interface OnUserCheckListener {
         void onUserCheck(boolean userExists);

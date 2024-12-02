@@ -9,9 +9,8 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class DatabaseConfigActivity extends AppCompatActivity {
-    public EditText etServerAddress, etServerPort, etDatabaseName, etUsername, etPassword, etFirmNumber, etPeriodNumber;
+    public EditText etServerAddress, etServerPort, etTigerDatabaseName, etAnatoliaSoftDatabaseName, etUsername, etPassword, etFirmNumber, etPeriodNumber;
     public Button btnSaveConfig;
-
     public DatabaseHelper databaseHelper;
 
     @Override
@@ -25,7 +24,8 @@ public class DatabaseConfigActivity extends AppCompatActivity {
         // Initialize views
         etServerAddress = findViewById(R.id.et_server_address);
         etServerPort = findViewById(R.id.et_server_port);
-        etDatabaseName = findViewById(R.id.et_database_name);
+        etTigerDatabaseName = findViewById(R.id.et_TigerDatabase_name);
+        etAnatoliaSoftDatabaseName = findViewById(R.id.et_AnatoliaSoft_Database_name);
         etUsername = findViewById(R.id.et_username);
         etPassword = findViewById(R.id.et_password);
         etFirmNumber = findViewById(R.id.et_firm_number);
@@ -47,6 +47,8 @@ public class DatabaseConfigActivity extends AppCompatActivity {
     private void loadCurrentConfiguration() {
         etServerAddress.setText(databaseHelper.getServerAddress());
         etServerPort.setText(databaseHelper.getServerPort());
+        etTigerDatabaseName.setText(databaseHelper.getTigerDatabaseName());
+        etAnatoliaSoftDatabaseName.setText(databaseHelper.getAnatoliaSoftDatabaseName());
         etUsername.setText(databaseHelper.getUsername());
         etFirmNumber.setText(databaseHelper.getFirmNumber());
         etPeriodNumber.setText(databaseHelper.getPeriodNumber());
@@ -56,7 +58,8 @@ public class DatabaseConfigActivity extends AppCompatActivity {
         // Validate inputs (add more robust validation as needed)
         String serverAddress = etServerAddress.getText().toString().trim();
         String serverPort = etServerPort.getText().toString().trim();
-        String databaseName = etDatabaseName.getText().toString().trim();
+        String TigerDatabaseName = etTigerDatabaseName.getText().toString().trim();
+        String AnatoliaSoftDatabaseName = etAnatoliaSoftDatabaseName.getText().toString().trim();
         String username = etUsername.getText().toString().trim();
         String password = etPassword.getText().toString().trim();
         String firmNumber = etFirmNumber.getText().toString().trim();
@@ -70,15 +73,7 @@ public class DatabaseConfigActivity extends AppCompatActivity {
         }
 
         // Save configuration
-        databaseHelper.saveConfiguration(
-                serverAddress,
-                serverPort,
-                databaseName,
-                username,
-                password,
-                firmNumber,
-                periodNumber
-        );
+        databaseHelper.saveConfiguration(serverAddress, serverPort, TigerDatabaseName, AnatoliaSoftDatabaseName, username, password, firmNumber, periodNumber);
 
         // Show success message
         Toast.makeText(this, "Yapılandırılma başarılı", Toast.LENGTH_SHORT).show();

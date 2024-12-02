@@ -43,6 +43,7 @@ public class Sevkiyat_QR extends Fragment {
     private static final String TAG = "Sevkiyat_QR";
     private static final String ARG_FICHENO = "FICHENO";
     private static final Pattern QR_SERIAL_PATTERN = Pattern.compile("KAREKODNO_([^|]+)");
+    private DatabaseHelper databaseHelper;
 
     private String currentReceiptNo;
     private CameraSourcePreview cameraPreview;
@@ -96,9 +97,12 @@ public class Sevkiyat_QR extends Fragment {
         scanStatusTextView = view.findViewById(R.id.scan_status);
         confirmReceiptButton = view.findViewById(R.id.confirm_receipt_button);
 
+        // Initialize DatabaseHelper with the context
+        DatabaseHelper dbHelper = new DatabaseHelper(requireContext()); // Pass the context
+
         // Setup executor and item manager
         executorService = Executors.newSingleThreadExecutor();
-        itemManager = new ReceiptItemManager(currentReceiptNo);
+        itemManager = new ReceiptItemManager(currentReceiptNo, dbHelper); // Pass both parameters
 
         // Setup confirm button
         confirmReceiptButton.setOnClickListener(v -> {
@@ -109,6 +113,8 @@ public class Sevkiyat_QR extends Fragment {
             }
         });
     }
+
+
 
     private void setupBarcodeDetection() {
         BarcodeDetector barcodeDetector = new BarcodeDetector.Builder(requireContext())
@@ -240,25 +246,25 @@ public class Sevkiyat_QR extends Fragment {
         executorService.submit(() -> {
             boolean itemsInserted = itemManager.bulkInsertScannedItems();
 
-            try (Connection conn = DatabaseConnectionManager.getConnection()) {
-                String updateQuery = "UPDATE ANATOLIASOFT.dbo.AST_SHIPPLAN SET STATUS = 1 WHERE SLIPNR = ?";
-                try (PreparedStatement stmt = conn.prepareStatement(updateQuery)) {
-                    stmt.setString(1, currentReceiptNo);
-                    int affected = stmt.executeUpdate();
+            try (Connection connection = databaseHelper.getAnatoliaSoftConnection()) {
+                String updateQuery = "UPDATE " +
+                        databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN") +
+                        " SET STATUS = 1 WHERE SLIPNR = ?";
 
-                    requireActivity().runOnUiThread(() -> {
-                        if (affected > 0 && itemsInserted) {
-                            showToast("Sevkiyat tamamlandı.");
-                            requireActivity().onBackPressed();
-                        } else {
-                            showToast("Sevkiyat tamamlanamadı.");
-                        }
-                    });
-                }
-                } catch (SQLException e) {
-                    Log.e(TAG, "Error updating receipt status", e);
-                    requireActivity().runOnUiThread(() ->
-                            showToast("Sevkiyat tamamlanırken bir hata meydana geldi (SQL)."));
+                int affected = databaseHelper.executeAnatoliaSoftUpdate(updateQuery, currentReceiptNo);
+
+                requireActivity().runOnUiThread(() -> {
+                    if (affected > 0 && itemsInserted) {
+                        showToast("Sevkiyat tamamlandı.");
+                        requireActivity().onBackPressed();
+                    } else {
+                        showToast("Sevkiyat tamamlanamadı.");
+                    }
+                });
+            } catch (SQLException e) {
+                Log.e(TAG, "Error updating receipt status", e);
+                requireActivity().runOnUiThread(() ->
+                        showToast("Sevkiyat tamamlanırken bir hata meydana geldi (SQL)."));
             }
         });
     }
@@ -293,63 +299,68 @@ class ReceiptItemManager {
     private final Map<String, Boolean> itemsToScan = new HashMap<>();
     private final Map<String, String> scannedItems = new HashMap<>();
     private final List<ScannedQRItem> qrCodeCache = new ArrayList<>();
-
+    private final DatabaseHelper databaseHelper;
     // Single enum definition
     public enum ScanResult {
         SUCCESS, ALREADY_SCANNED, ITEM_NOT_IN_RECEIPT
     }
 
-    public ReceiptItemManager(String receiptNo) {
+    public ReceiptItemManager(String receiptNo, DatabaseHelper databaseHelper) {
         this.receiptNo = receiptNo;
+        this.databaseHelper = databaseHelper; // Initialize here
     }
 
     public void loadReceiptItems() {
-        try (Connection conn = DatabaseConnectionManager.getConnection()) {
+        try (Connection conn = databaseHelper.getTigerConnection()) {
             if (conn == null) {
                 Log.e(TAG, "Database connection is null");
                 return;
             }
-
+            // Split receipt numbers and prepare for query
             String[] ficheNos = receiptNo.split("/");
             itemsToScan.clear();
             scannedItems.clear();
+            // Dynamically resolve table names using DatabaseHelper
+            String tigerStFicheTable = databaseHelper.getTigerDbTableName("STFICHE");
+            String tigerStLineTable = databaseHelper.getTigerDbTableName("STLINE");
+            String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
 
-            String tableSuffix = "001";
-            String tablePrefix = String.format("LG_%s", tableSuffix);
-            String tableName = tablePrefix + "_01_STFICHE";
-            String stLineTable = tablePrefix + "_01_STLINE";
-            String itemsTable = tablePrefix + "_ITEMS";
-
+            // Prepare IN clause with sanitized receipt numbers
             String ficheNosList = Arrays.stream(ficheNos)
                     .map(no -> "'" + no.trim() + "'")
                     .collect(Collectors.joining(","));
 
+            // Build query dynamically
             String query = String.format(
                     "SELECT DISTINCT " +
                             "IT.CODE AS ItemCode, " +
                             "IT.NAME AS ItemName " +
-                            "FROM TIGERDB.dbo.%s ST " +
-                            "INNER JOIN TIGERDB.dbo.%s SL ON SL.STFICHEREF = ST.LOGICALREF " +
-                            "INNER JOIN TIGERDB.dbo.%s IT ON IT.LOGICALREF = SL.STOCKREF " +
+                            "FROM %s ST " +
+                            "INNER JOIN %s SL ON SL.STFICHEREF = ST.LOGICALREF " +
+                            "INNER JOIN %s IT ON IT.LOGICALREF = SL.STOCKREF " +
                             "WHERE ST.FICHENO IN (%s) " +
                             "AND ST.TRCODE = 8 " +
                             "AND ST.BILLED = 0",
-                    tableName, stLineTable, itemsTable, ficheNosList
+                    tigerStFicheTable, tigerStLineTable, tigerItemsTable, ficheNosList
             );
-
+            // Execute query and process results
             try (PreparedStatement stmt = conn.prepareStatement(query);
                  ResultSet rs = stmt.executeQuery()) {
 
                 while (rs.next()) {
                     String itemCode = rs.getString("ItemCode");
-                    itemsToScan.put(itemCode, false);
+                    String itemName = rs.getString("ItemName");
+                    List<Item> itemsToScan = new ArrayList<>();
+
                 }
+
+            } catch (SQLException e) {
+                Log.e(TAG, "Error executing query: " + e.getMessage(), e);
             }
         } catch (SQLException e) {
-            Log.e(TAG, "Error loading receipt items", e);
+            Log.e(TAG, "Error establishing database connection: " + e.getMessage(), e);
         }
-    }
-
+}
     private String extractSerialNumber(String qrCode) {
         int startIndex = qrCode.indexOf("KAREKODNO_");
         if (startIndex != -1) {
@@ -401,10 +412,21 @@ class ReceiptItemManager {
             return false;
         }
 
-        try (Connection conn = DatabaseConnectionManager.getConnection()) {
+        try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
+            if (conn == null) {
+                Log.e(TAG, "Database connection is null");
+                return false;
+            }
+
+            // Dynamically resolve table names
+            String shipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
+            String shipPlanQRTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN_QR");
+
             // Check if ORGNR exists for this receipt
-            String findOrgnrQuery = "SELECT TOP 1 ORGNR FROM ANATOLIASOFT.dbo.AST_SHIPPLAN " +
-                    "WHERE STATUS = 0 AND SLIPNR = ?";
+            String findOrgnrQuery = String.format(
+                    "SELECT TOP 1 ORGNR FROM %s WHERE STATUS = 0 AND SLIPNR = ?",
+                    shipPlanTable
+            );
             String orgnr = null;
             try (PreparedStatement orgnrStmt = conn.prepareStatement(findOrgnrQuery)) {
                 orgnrStmt.setString(1, receiptNo);
@@ -420,9 +442,11 @@ class ReceiptItemManager {
                 return false;
             }
 
-            // Prepare batch insert
-            String insertQuery = "INSERT INTO ANATOLIASOFT.dbo.AST_SHIPPLAN_QR " +
-                    "(SHP_SERIALNO, SHP_ITEMCODE, SHP_ID) VALUES (?, ?, ?)";
+            // Prepare batch insert into dynamically resolved table
+            String insertQuery = String.format(
+                    "INSERT INTO %s (SHP_SERIALNO, SHP_ITEMCODE, SHP_ID) VALUES (?, ?, ?)",
+                    shipPlanQRTable
+            );
             try (PreparedStatement insertStmt = conn.prepareStatement(insertQuery)) {
                 for (ScannedQRItem item : qrCodeCache) {
                     insertStmt.setString(1, item.serialNumber);
@@ -438,14 +462,15 @@ class ReceiptItemManager {
             return true;
 
         } catch (SQLException e) {
-            Log.e(TAG, "Error bulk inserting scanned items", e);
+            Log.e(TAG, "Error bulk inserting scanned items: " + e.getMessage(), e);
             return false;
         }
     }
 
+
     // Modify to add to cache instead of immediate database check
     public ScanResult cacheScannedItem(String serialNumber) {
-        try (Connection conn = DatabaseConnectionManager.getConnection()) {
+        try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
             String extractedItemCode = extractItemCodeFromQR(serialNumber);
             String extractedSerialNo = extractSerialNumber(serialNumber);
 
@@ -454,9 +479,14 @@ class ReceiptItemManager {
                 return ScanResult.ALREADY_SCANNED;
             }
 
+            // Dynamically resolve table name
+            String shipPlanQRTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN_QR");
+
             // Database check for already scanned items
-            String checkScanQuery = "SELECT COUNT(*) AS scan_count FROM ANATOLIASOFT.dbo.AST_SHIPPLAN_QR " +
-                    "WHERE SHP_SERIALNO = ? AND SHP_ITEMCODE = ?";
+            String checkScanQuery = String.format(
+                    "SELECT COUNT(*) AS scan_count FROM %s WHERE SHP_SERIALNO = ? AND SHP_ITEMCODE = ?",
+                    shipPlanQRTable
+            );
             try (PreparedStatement checkStmt = conn.prepareStatement(checkScanQuery)) {
                 checkStmt.setString(1, extractedSerialNo);
                 checkStmt.setString(2, extractedItemCode);
@@ -544,26 +574,4 @@ class CameraSourcePreview extends ViewGroup {
         surfaceView.layout(0, 0, width, height);
     }
 
-}
-class DatabaseConnectionManager {
-    protected static final String DB_URL = "jdbc:jtds:sqlserver://192.168.1.113:1433/AndroidTest";
-    protected static final String DB_USER = "androidemu";
-    protected static final String DB_PASSWORD = "AndroidEmu123";
-
-    // Optional: If you want to include error handling within the method
-    public static Connection getConnection() {
-        try {
-            Log.d("DatabaseConnectionManager", "Attempting to connect with URL: " + DB_URL);
-            Log.d("DatabaseConnectionManager", "Attempting to connect with User: " + DB_USER);
-            Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
-            Log.d("DatabaseConnectionManager", "Connection successful");
-            return conn;
-        } catch (SQLException e) {
-            Log.e("DatabaseConnectionManager", "Connection error details:", e);
-            Log.e("DatabaseConnectionManager", "Error message: " + e.getMessage());
-            Log.e("DatabaseConnectionManager", "SQL State: " + e.getSQLState());
-            Log.e("DatabaseConnectionManager", "Error Code: " + e.getErrorCode());
-            return null;
-        }
-    }
 }

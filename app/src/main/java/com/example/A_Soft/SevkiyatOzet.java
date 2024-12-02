@@ -47,81 +47,79 @@ public class SevkiyatOzet extends Fragment {
     }
 
 
-    private class FetchDetailsTask extends AsyncTask<String, Void, List<Map<String, String>>> {
+    private class FetchDetailsTask extends AsyncTask<String, Void, List<DraftReceipt>> {
         private final DatabaseHelper databaseHelper;
 
-        private FetchDetailsTask(DatabaseHelper databaseHelper) {
+        public FetchDetailsTask(DatabaseHelper databaseHelper) {
             this.databaseHelper = databaseHelper;
         }
 
         @Override
-        protected List<Map<String, String>> doInBackground(String... params) {
-            List<Map<String, String>> detailsList = new ArrayList<>();
+        protected List<DraftReceipt> doInBackground(String... params) {
+            List<DraftReceipt> detailsList = new ArrayList<>();
             String ficheNo = params[0]; // Received FICHENO
 
-            // Split by '/' and then format it properly
-            String[] ficheNos = ficheNo.split("/"); // Split by '/' to handle multiple fiche numbers
+            // Prepare ficheNo for SQL IN clause
+            String[] ficheNos = ficheNo.split("/");
             StringBuilder formattedFicheNo = new StringBuilder();
             for (String fiche : ficheNos) {
                 if (formattedFicheNo.length() > 0) {
-                    formattedFicheNo.append("','"); // Add a separator between fiche numbers
+                    formattedFicheNo.append("','");
                 }
-                formattedFicheNo.append(fiche.trim()); // Trim whitespace and append ficheNo
+                formattedFicheNo.append(fiche.trim());
             }
-
-            // Add quotes around each ficheNo
             ficheNo = "'" + formattedFicheNo.toString() + "'";
 
-            try (Connection connection = DriverManager.getConnection(
-                    databaseHelper.getJdbcUrl(),
-                    databaseHelper.getUsername(),
-                    databaseHelper.getPassword())) {
+            try (Connection connection = databaseHelper.getTigerConnection()) {
 
-                // Dynamically build table names using the table suffix
-                String tableSuffix = "001"; // Replace with dynamic table suffix (e.g., "001", "002")
-                String tablePrefix = String.format("LG_%s", tableSuffix);
-                String tableName = tablePrefix + "_01_STFICHE";
-                String stLineTable = tablePrefix + "_01_STLINE";
-                String itemsTable = tablePrefix + "_ITEMS";
+                // Use dynamic table names from DatabaseHelper
+                String tigerStFicheTable = databaseHelper.getTigerDbTableName("STFICHE");
+                String tigerStLineTable = databaseHelper.getTigerDbTableName("STLINE");
+                String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
+                String anatoliaSoftItemsTable = databaseHelper.getAnatoliaSoftTableName("AST_ITEMS");
+                String anatoliaSoftShipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
 
-                // Construct the SQL query dynamically to refer to the TIGERDB database
                 String query = String.format(
                         "SELECT " +
-                                "ST.FICHENO AS [Fiş No], " +
-                                "IT.NAME AS [Ürün] " + // Keep the 'items' related column
-                                "FROM TIGERDB.dbo.%s ST " +
-                                "INNER JOIN TIGERDB.dbo.%s SL ON SL.STFICHEREF = ST.LOGICALREF " +
-                                "INNER JOIN TIGERDB.dbo.%s IT ON IT.LOGICALREF = SL.STOCKREF " +
-                                "WHERE ST.FICHENO IN (%s) AND ST.TRCODE = 8 AND ST.BILLED = 0 " +
-                                "ORDER BY ST.DATE_ ASC", // No need to include other fields
-                        tableName, stLineTable, itemsTable,
-                        ficheNo // Pass the formatted multiple FICHENO values directly
+                                "CONVERT(VARCHAR, SP.SLIPDATE, 23) AS [Tarih], " +
+                                "STRING_AGG(IT.CODE, ', ') AS [Malzeme Kodu], " +
+                                "STRING_AGG(IT.NAME, ', ') AS [Malzeme Adı], " +
+                                "STRING_AGG(CAST(SL.AMOUNT AS VARCHAR), ', ') AS [Miktar], " +
+                                "SP.SLIPNR AS [Fiş Kodu], " +
+                                "CASE SP.STATUS WHEN 0 THEN 'Açık' WHEN 1 THEN 'Kısmi' ELSE 'Bilinmeyen' END AS [Durum], " +
+                                "SP.ORGNR AS [Operasyon Fiş No] " +
+                                "FROM %s ST " +
+                                "INNER JOIN %s SL ON SL.STFICHEREF = ST.LOGICALREF " +
+                                "INNER JOIN %s IT ON IT.LOGICALREF = SL.STOCKREF " +
+                                "LEFT JOIN %s AI ON AI.CODE = IT.CODE " +
+                                "LEFT JOIN %s SP ON SP.SLIPNR = ST.FICHENO " +
+                                "WHERE ST.TRCODE = 8 " +
+                                "AND ST.BILLED = 0 " +
+                                "AND ST.FICHENO IN (%s) " +
+                                "AND SP.ORGNR IS NOT NULL " +
+                                "AND (SP.STATUS = 0 OR SP.STATUS = 1) " +
+                                "GROUP BY SP.SLIPNR, SP.SLIPDATE, SP.STATUS, SP.ORGNR",
+                        tigerStFicheTable,
+                        tigerStLineTable,
+                        tigerItemsTable,
+                        anatoliaSoftItemsTable,
+                        anatoliaSoftShipPlanTable,
+                        ficheNo
                 );
 
+                try (PreparedStatement statement = connection.prepareStatement(query);
+                     ResultSet resultSet = statement.executeQuery()) {
 
-                PreparedStatement statement = connection.prepareStatement(query);
-                try (ResultSet resultSet = statement.executeQuery()) {
-
-                    // Group by Fiş No and accumulate Ürünler
-                    Map<String, StringBuilder> groupedItems = new HashMap<>();
                     while (resultSet.next()) {
-                        String ficheNoValue = resultSet.getString("Fiş No");
-                        String product = resultSet.getString("Ürün");
-
-                        // If receipt already exists in map, append the item to it
-                        if (groupedItems.containsKey(ficheNoValue)) {
-                            groupedItems.get(ficheNoValue).append(", ").append(product);
-                        } else {
-                            groupedItems.put(ficheNoValue, new StringBuilder(product));
-                        }
-                    }
-
-                    // Convert grouped data into list format for displaying
-                    for (Map.Entry<String, StringBuilder> entry : groupedItems.entrySet()) {
-                        Map<String, String> detail = new HashMap<>();
-                        detail.put("Fiş No", entry.getKey());
-                        detail.put("Ürünler", entry.getValue().toString());
-                        detailsList.add(detail);
+                        detailsList.add(new DraftReceipt(
+                                resultSet.getString("Tarih"),
+                                resultSet.getString("Malzeme Kodu"),
+                                resultSet.getString("Malzeme Adı"),
+                                resultSet.getString("Miktar"),
+                                resultSet.getString("Fiş Kodu"),
+                                resultSet.getString("Durum"),
+                                resultSet.getString("Operasyon Fiş No")
+                        ));
                     }
                 }
             } catch (Exception e) {
@@ -131,13 +129,18 @@ public class SevkiyatOzet extends Fragment {
         }
 
         @Override
-        protected void onPostExecute(List<Map<String, String>> details) {
+        protected void onPostExecute(List<DraftReceipt> details) {
             if (!details.isEmpty()) {
                 // Build the display format for all receipt details
                 StringBuilder displayData = new StringBuilder();
-                for (Map<String, String> detail : details) {
-                    displayData.append("Fiş No: ").append(detail.get("Fiş No")).append("\n");
-                    displayData.append("Ürünler: ").append(detail.get("Ürünler")).append("\n\n");
+                for (DraftReceipt detail : details) {
+                    displayData.append("Tarih: ").append(detail.getDate()).append("\n");
+                    displayData.append("Malzeme Kodu: ").append(detail.getMaterialCode()).append("\n");
+                    displayData.append("Malzeme Adı: ").append(detail.getMaterialName()).append("\n");
+                    displayData.append("Miktar: ").append(detail.getAmount()).append("\n");
+                    displayData.append("Fiş Kodu: ").append(detail.getReceiptNo()).append("\n");
+                    displayData.append("Durum: ").append(detail.getStatus()).append("\n");
+                    displayData.append("Operasyon Fiş No: ").append(detail.getOprFicheNo()).append("\n\n");
                 }
                 productTextView.setText(displayData.toString());
             } else {

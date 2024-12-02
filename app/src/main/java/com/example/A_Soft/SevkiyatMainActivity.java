@@ -65,15 +65,11 @@ public class SevkiyatMainActivity extends AppCompatActivity {
         @Override
         protected List<DraftReceipt> doInBackground(Void... voids) {
             List<DraftReceipt> drafts = new ArrayList<>();
-            try (Connection connection = DriverManager.getConnection(
-                    databaseHelper.getJdbcUrl(),
-                    databaseHelper.getUsername(),
-                    databaseHelper.getPassword())) {
-
-                // Use dynamic table names from DatabaseHelper
+            try (Connection connection = databaseHelper.getTigerConnection()) {
+                // Dynamic table names using DatabaseHelper methods
                 String tigerStFicheTable = databaseHelper.getTigerDbTableName("STFICHE");
                 String tigerStLineTable = databaseHelper.getTigerDbTableName("STLINE");
-                String tigerItemsTable = databaseHelper.getTigerDbTableName("ITEMS");
+                String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
                 String anatoliaSoftItemsTable = databaseHelper.getAnatoliaSoftTableName("AST_ITEMS");
                 String anatoliaSoftShipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
 
@@ -104,43 +100,42 @@ public class SevkiyatMainActivity extends AppCompatActivity {
                         anatoliaSoftShipPlanTable
                 );
 
-                PreparedStatement statement = connection.prepareStatement(query);
-                ResultSet resultSet = statement.executeQuery();
+                try (PreparedStatement statement = connection.prepareStatement(query);
+                     ResultSet resultSet = statement.executeQuery()) {
 
-                while (resultSet.next()) {
-                    String date = resultSet.getString("Tarih");
-                    String formattedDate = formatDate(date);
-                    String receiptNo = resultSet.getString("Fiş No");
-                    String ficheNo = resultSet.getString("Fiş Kodu");
-                    String materialCode = resultSet.getString("Malzeme Kodu");
-                    String materialName = resultSet.getString("Malzeme Adı");
-                    String amount = resultSet.getString("Miktar");
-                    int itemCount = resultSet.getInt("Toplam Kalem Sayısı");
-                    String status;
-                    if (resultSet.getInt("Durum") == 0) {
-                        status = "DEVAM EDİYOR (" + itemCount + " Ürün)";
-                    } else {
-                        status = "TAMAMLANDI (" + itemCount + " Ürün)";
+                    while (resultSet.next()) {
+                        String date = resultSet.getString("Tarih");
+                        String formattedDate = formatDate(date);
+                        String receiptNo = resultSet.getString("Fiş No");
+                        String ficheNo = resultSet.getString("Fiş Kodu");
+                        String materialCode = resultSet.getString("Malzeme Kodu");
+                        String materialName = resultSet.getString("Malzeme Adı");
+                        String amount = resultSet.getString("Miktar");
+                        int itemCount = resultSet.getInt("Toplam Kalem Sayısı");
+                        String status;
+                        if (resultSet.getInt("Durum") == 0) {
+                            status = "DEVAM EDİYOR (" + itemCount + " Ürün)";
+                        } else {
+                            status = "TAMAMLANDI (" + itemCount + " Ürün)";
+                        }
+
+                        DraftReceipt draft = new DraftReceipt(
+                                formattedDate,
+                                materialCode,
+                                materialName,
+                                amount,
+                                receiptNo,
+                                status,
+                                ficheNo
+                        );
+                        drafts.add(draft);
                     }
-
-                    DraftReceipt draft = new DraftReceipt(
-                            formattedDate,
-                            materialCode,
-                            materialName,
-                            amount,
-                            receiptNo,
-                            status,
-                            ficheNo
-                    );
-                    drafts.add(draft);
                 }
             } catch (Exception e) {
                 Log.e("FetchDraftReceiptsTask", "Error fetching drafts", e);
             }
             return drafts;
         }
-
-
 
         @Override
         protected void onPostExecute(List<DraftReceipt> drafts) {

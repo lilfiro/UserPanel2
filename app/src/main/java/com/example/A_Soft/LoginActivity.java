@@ -41,6 +41,9 @@ public class LoginActivity extends AppCompatActivity {
         loginButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                // Recreate DatabaseHelper to ensure latest config
+                databaseHelper = new DatabaseHelper(LoginActivity.this);
+
                 String username = usernameEditText.getText().toString();
                 String password = passwordEditText.getText().toString();
 
@@ -48,11 +51,10 @@ public class LoginActivity extends AppCompatActivity {
                     @Override
                     public void onUserCheck(boolean userExists) {
                         if (userExists) {
-                            // basarili giriste HomePage yonlendirir
                             Toast.makeText(LoginActivity.this, "Giriş Başarılı", Toast.LENGTH_SHORT).show();
                             Intent intent = new Intent(LoginActivity.this, HomeActivity.class);
                             startActivity(intent);
-                            finish(); // Optional: LoginActivity'ye donmemek icin kapatilir
+                            finish();
                         } else {
                             Toast.makeText(LoginActivity.this, "Geçersiz Giriş", Toast.LENGTH_SHORT).show();
                         }
