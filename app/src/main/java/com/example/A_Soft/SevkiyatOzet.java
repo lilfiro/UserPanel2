@@ -37,15 +37,22 @@ public class SevkiyatOzet extends Fragment {
             ficheNo = getArguments().getString("FICHENO");
         }
         Log.d("FICHENO", "Received FICHENO: " + ficheNo);
+        // Initialize DatabaseHelper
+        DatabaseHelper databaseHelper = new DatabaseHelper(requireContext());
 
         // Start fetching data
-        new FetchDetailsTask().execute(ficheNo);
+        new FetchDetailsTask(databaseHelper).execute(ficheNo);
 
         return rootView;
     }
 
 
     private class FetchDetailsTask extends AsyncTask<String, Void, List<Map<String, String>>> {
+        private final DatabaseHelper databaseHelper;
+
+        private FetchDetailsTask(DatabaseHelper databaseHelper) {
+            this.databaseHelper = databaseHelper;
+        }
 
         @Override
         protected List<Map<String, String>> doInBackground(String... params) {
@@ -65,7 +72,10 @@ public class SevkiyatOzet extends Fragment {
             // Add quotes around each ficheNo
             ficheNo = "'" + formattedFicheNo.toString() + "'";
 
-            try (Connection connection = DriverManager.getConnection(DatabaseHelper.DB_URL, DatabaseHelper.DB_USER, DatabaseHelper.DB_PASSWORD)) {
+            try (Connection connection = DriverManager.getConnection(
+                    databaseHelper.getJdbcUrl(),
+                    databaseHelper.getUsername(),
+                    databaseHelper.getPassword())) {
 
                 // Dynamically build table names using the table suffix
                 String tableSuffix = "001"; // Replace with dynamic table suffix (e.g., "001", "002")

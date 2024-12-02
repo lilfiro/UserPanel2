@@ -16,7 +16,7 @@ import android.widget.TextView;
 public class LoginActivity extends AppCompatActivity {
 
     private EditText usernameEditText, passwordEditText;
-    private Button loginButton;
+    private Button loginButton, settingsButton;
     private DatabaseHelper databaseHelper;
     ImageView imageView;
     TextView textView;
@@ -34,8 +34,9 @@ public class LoginActivity extends AppCompatActivity {
         usernameEditText = findViewById(R.id.usernamelb);
         passwordEditText = findViewById(R.id.passwordlb);
         loginButton = findViewById(R.id.loginbt);
+        settingsButton = findViewById(R.id.settingsbt);
 
-        databaseHelper = new DatabaseHelper();
+        databaseHelper = new DatabaseHelper(this);
 
         loginButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -58,8 +59,13 @@ public class LoginActivity extends AppCompatActivity {
                     }
                 });
             }
-
-
+        });
+        settingsButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(LoginActivity.this, DatabaseConfigActivity.class);
+                startActivity(intent);
+            }
         });
 
         imageView.setOnTouchListener(new OnSwipeTouchListener(getApplicationContext()) {

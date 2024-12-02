@@ -47,37 +47,62 @@ public class SevkiyatMainActivity extends AppCompatActivity {
         });
 
         recyclerView.setAdapter(adapter);
+        // Initialize DatabaseHelper
+        DatabaseHelper databaseHelper = new DatabaseHelper(this);
 
-        // Fetch data
-        new FetchDraftReceiptsTask().execute();
+        // Fetch data using DatabaseHelper
+        new FetchDraftReceiptsTask(databaseHelper).execute();
     }
 
     // AsyncTask to fetch data from the database in the background
     private class FetchDraftReceiptsTask extends AsyncTask<Void, Void, List<DraftReceipt>> {
+        private final DatabaseHelper databaseHelper;
+
+        public FetchDraftReceiptsTask(DatabaseHelper databaseHelper) {
+            this.databaseHelper = databaseHelper;
+        }
+
         @Override
         protected List<DraftReceipt> doInBackground(Void... voids) {
             List<DraftReceipt> drafts = new ArrayList<>();
-            try (Connection connection = DriverManager.getConnection(DatabaseHelper.DB_URL, DatabaseHelper.DB_USER, DatabaseHelper.DB_PASSWORD)) {
-                String query =   "SELECT "+
-                        "SP.ORGNR AS [Fiş No], " +
-                        "SP.SLIPNR AS [Fiş Kodu], " +
-                        "STRING_AGG(IT.CODE, ', ') AS [Malzeme Kodu], " +
-                        "STRING_AGG(IT.NAME, ', ') AS [Malzeme Adı], " +
-                        "STRING_AGG(CAST(SL.AMOUNT AS VARCHAR), ', ') AS [Miktar], " +
-                        "SP.SLIPDATE AS [Tarih], " +
-                        "COUNT(DISTINCT IT.LOGICALREF) AS [Toplam Kalem Sayısı], " +
-                        "SP.STATUS AS [Durum] " +
-                        "FROM TIGERDB.dbo.LG_001_01_STFICHE ST " +
-                        "INNER JOIN TIGERDB.dbo.LG_001_01_STLINE SL ON SL.STFICHEREF = ST.LOGICALREF " +
-                        "INNER JOIN TIGERDB.dbo.LG_001_ITEMS IT ON IT.LOGICALREF = SL.STOCKREF " +
-                        "LEFT JOIN ANATOLIASOFT.dbo.AST_ITEMS AI ON AI.CODE = IT.CODE " +
-                        "LEFT JOIN ANATOLIASOFT.dbo.AST_SHIPPLAN SP ON SP.SLIPNR = ST.FICHENO " +
-                        "WHERE ST.TRCODE = 8 " +
-                        "AND ST.BILLED = 0 " +
-                        "AND SP.ORGNR  IS NOT NULL " +
-                        "AND (SP.STATUS = 0 OR SP.STATUS = 1) " +
-                        "GROUP BY SP.ORGNR, SP.SLIPNR, SP.SLIPDATE, SP.STATUS";
+            try (Connection connection = DriverManager.getConnection(
+                    databaseHelper.getJdbcUrl(),
+                    databaseHelper.getUsername(),
+                    databaseHelper.getPassword())) {
 
+                // Use dynamic table names from DatabaseHelper
+                String tigerStFicheTable = databaseHelper.getTigerDbTableName("STFICHE");
+                String tigerStLineTable = databaseHelper.getTigerDbTableName("STLINE");
+                String tigerItemsTable = databaseHelper.getTigerDbTableName("ITEMS");
+                String anatoliaSoftItemsTable = databaseHelper.getAnatoliaSoftTableName("AST_ITEMS");
+                String anatoliaSoftShipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
+
+                String query = String.format(
+                        "SELECT " +
+                                "SP.ORGNR AS [Fiş No], " +
+                                "SP.SLIPNR AS [Fiş Kodu], " +
+                                "STRING_AGG(IT.CODE, ', ') AS [Malzeme Kodu], " +
+                                "STRING_AGG(IT.NAME, ', ') AS [Malzeme Adı], " +
+                                "STRING_AGG(CAST(SL.AMOUNT AS VARCHAR), ', ') AS [Miktar], " +
+                                "SP.SLIPDATE AS [Tarih], " +
+                                "COUNT(DISTINCT IT.LOGICALREF) AS [Toplam Kalem Sayısı], " +
+                                "SP.STATUS AS [Durum] " +
+                                "FROM %s ST " +
+                                "INNER JOIN %s SL ON SL.STFICHEREF = ST.LOGICALREF " +
+                                "INNER JOIN %s IT ON IT.LOGICALREF = SL.STOCKREF " +
+                                "LEFT JOIN %s AI ON AI.CODE = IT.CODE " +
+                                "LEFT JOIN %s SP ON SP.SLIPNR = ST.FICHENO " +
+                                "WHERE ST.TRCODE = 8 " +
+                                "AND ST.BILLED = 0 " +
+                                "AND SP.ORGNR  IS NOT NULL " +
+                                "AND (SP.STATUS = 0 OR SP.STATUS = 1) " +
+                                "GROUP BY SP.ORGNR, SP.SLIPNR, SP.SLIPDATE, SP.STATUS",
+                        tigerStFicheTable,
+                        tigerStLineTable,
+                        tigerItemsTable,
+                        anatoliaSoftItemsTable,
+                        anatoliaSoftShipPlanTable
+                );
 
                 PreparedStatement statement = connection.prepareStatement(query);
                 ResultSet resultSet = statement.executeQuery();
@@ -114,6 +139,7 @@ public class SevkiyatMainActivity extends AppCompatActivity {
             }
             return drafts;
         }
+
 
 
         @Override
