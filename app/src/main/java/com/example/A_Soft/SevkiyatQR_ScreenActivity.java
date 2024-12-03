@@ -381,50 +381,62 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
 class CameraSourcePreview extends ViewGroup {
     private SurfaceView surfaceView;
     private CameraSource cameraSource;
-    private boolean isCameraStarted = false;
+    private boolean isSurfaceReady = false;
 
     public CameraSourcePreview(Context context, AttributeSet attrs) {
         super(context, attrs);
+
         surfaceView = new SurfaceView(context);
         surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
-                if (cameraSource != null && !isCameraStarted) {
-                    startCamera();
+                isSurfaceReady = true;
+                if (cameraSource != null) {
+                    try {
+                        cameraSource.start(holder);
+                        Log.d("CameraPreview", "Camera started on surface ready");
+                    } catch (IOException e) {
+                        Log.e("CameraPreview", "IOException during camera start", e);
+                    }
                 }
             }
 
             @Override
-            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {}
+            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                Log.d("CameraPreview", "Surface changed: " + width + "x" + height);
+            }
 
             @Override
             public void surfaceDestroyed(SurfaceHolder holder) {
                 stopCamera();
+                isSurfaceReady = false;
             }
         });
+
         addView(surfaceView);
+    }
+
+    public void startCamera() {
+        if (isSurfaceReady && cameraSource != null) {
+            try {
+                cameraSource.start(surfaceView.getHolder());
+                Log.d("CameraPreview", "Camera started successfully");
+            } catch (IOException e) {
+                Log.e("CameraPreview", "IOException when starting camera", e);
+            }
+        } else {
+            Log.w("CameraPreview", "Camera start deferred until surface is ready");
+        }
     }
 
     public void setCameraSource(CameraSource cameraSource) {
         this.cameraSource = cameraSource;
-        isCameraStarted = false;
-    }
-
-    public void startCamera() {
-        if (cameraSource != null && !isCameraStarted) {
-            try {
-                cameraSource.start(surfaceView.getHolder());
-                isCameraStarted = true;
-            } catch (IOException e) {
-                Log.e("CameraPreview", "Error starting camera", e);
-            }
-        }
     }
 
     public void stopCamera() {
         if (cameraSource != null) {
             cameraSource.stop();
-            isCameraStarted = false;
+            Log.d("CameraPreview", "Camera stopped");
         }
     }
 
@@ -434,7 +446,6 @@ class CameraSourcePreview extends ViewGroup {
         int height = bottom - top;
         surfaceView.layout(0, 0, width, height);
     }
-
 }
 class ReceiptItemManager {
     private static final String TAG = "ReceiptItemManager";
