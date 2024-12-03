@@ -1,5 +1,6 @@
 package com.example.A_Soft;
 
+import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.View;
@@ -32,6 +33,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 import java.sql.ResultSetMetaData;
 import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.vision.CameraSource;
@@ -68,7 +71,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     private String currentReceiptNo;
     private ReceiptItemManager itemManager;
     private ExecutorService executorService;
-
+    private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
     private long lastScanTime = 0;
     private static final long SCAN_DEBOUNCE_INTERVAL = 2000; // 2 seconds
 
@@ -82,8 +85,39 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
 
         // Initialize components
         initializeComponents();
-        setupBarcodeDetection();
+
+        // Check for camera permission
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            setupBarcodeDetection();
+        } else {
+            requestCameraPermission();
+        }
+
         loadReceiptItems();
+    }
+    private void requestCameraPermission() {
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)) {
+            // Show explanation (if needed)
+            new AlertDialog.Builder(this)
+                    .setMessage("Kamera izni gerekiyor")
+                    .setPositiveButton("Tamam", (dialog, which) -> ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE))
+                    .create().show();
+        } else {
+            // Directly request permission
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
+        }
+    }
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted, proceed with setting up barcode detection
+                setupBarcodeDetection();
+            } else {
+                // Permission denied, show a message or handle appropriately
+                Toast.makeText(this, "Kamera izni verilmedi", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private void initializeComponents() {
@@ -108,7 +142,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             if (itemManager.areAllItemsScanned()) {
                 updateReceiptStatus();
             } else {
-                Toast.makeText(this, "Tamamlanmadan önce tüm ürünler taratılmalıdır.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Tamamlanmadan önce tüm malzemeler taratılmalıdır.", Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -170,6 +204,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                     switch (result) {
                         case SUCCESS:
                             showItemConfirmationDialog(qrCodeData);
+                            updateScanStatus(); // Refresh table with updated scanned counts
                             break;
                         case ALREADY_SCANNED:
                         case ITEM_NOT_IN_RECEIPT:
@@ -193,8 +228,8 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         String itemCode = itemManager.extractItemCodeFromQR(serialNumber);
 
         new AlertDialog.Builder(this)
-                .setTitle("Ürün okundu")
-                .setMessage("Ürünler: " + itemCode)
+                .setTitle("Malzeme okundu")
+                .setMessage("Malzemeler: " + itemCode)
                 .setPositiveButton("Tamam", (dialog, which) -> {
                     updateScanStatus();
                     confirmReceiptButton.setEnabled(itemManager.areAllItemsScanned());
@@ -204,12 +239,31 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     }
 
     private void updateScanStatus() {
-        String status = String.format("Okunacak ürünler: %d/%d",
-                itemManager.getScannedCount(),
-                itemManager.getTotalItems());
-        scanStatusTextView.setText(status);
-        confirmReceiptButton.setEnabled(itemManager.areAllItemsScanned());
+        runOnUiThread(() -> {
+            // Update header or summary information
+            String status = String.format("Okutulacak malzemeler: %d/%d",
+                    itemManager.getScannedCount(),
+                    itemManager.getTotalItems());
+            scanStatusTextView.setText(status);
+
+            // Update table rows dynamically
+            for (int i = 1; i < tableLayout.getChildCount(); i++) { // Skip header row
+                TableRow row = (TableRow) tableLayout.getChildAt(i);
+
+                TextView materialNameView = (TextView) row.getChildAt(0); // First column
+                TextView scannedQuantityView = (TextView) row.getChildAt(2); // Third column
+
+                String materialName = materialNameView.getText().toString();
+                int scannedCount = itemManager.getScannedCountForItem(materialName);
+
+                scannedQuantityView.setText(String.valueOf(scannedCount));
+            }
+
+            // Enable/disable confirm button
+            confirmReceiptButton.setEnabled(itemManager.areAllItemsScanned());
+        });
     }
+
 
     private void loadReceiptItems() {
         executorService.submit(() -> {
@@ -312,48 +366,33 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(List<DraftReceipt> details) {
-            // Remove existing rows (if any)
             tableLayout.removeAllViews();
 
             // Add table headers
             TableRow headerRow = new TableRow(SevkiyatQR_ScreenActivity.this);
-            TextView headerMaterial = new TextView(SevkiyatQR_ScreenActivity.this);
-            headerMaterial.setText("Malzemeler");
-            headerRow.addView(headerMaterial);
-
-            TextView headerExpectedQuantity = new TextView(SevkiyatQR_ScreenActivity.this);
-            headerExpectedQuantity.setText("Okutulacak Miktar");
-            headerRow.addView(headerExpectedQuantity);
-
-            TextView headerScannedQuantity = new TextView(SevkiyatQR_ScreenActivity.this);
-            headerScannedQuantity.setText("Okunan Miktar");
-            headerRow.addView(headerScannedQuantity);
-
+            headerRow.addView(createTextView("Malzemeler"));
+            headerRow.addView(createTextView("Okutulacak Miktar"));
+            headerRow.addView(createTextView("Okunan Miktar"));
             tableLayout.addView(headerRow);
 
             // Add dynamic rows for each item
             for (DraftReceipt detail : details) {
                 TableRow row = new TableRow(SevkiyatQR_ScreenActivity.this);
 
-                // Material name
-                TextView materialTextView = new TextView(SevkiyatQR_ScreenActivity.this);
-                materialTextView.setText(detail.getMaterialName());
-                row.addView(materialTextView);
-
-                // Expected quantity (can be fetched from the database or set as 0)
-                TextView expectedQuantityTextView = new TextView(SevkiyatQR_ScreenActivity.this);
-                expectedQuantityTextView.setText(detail.getAmount());
-                row.addView(expectedQuantityTextView);
-
-                // Scanned quantity (this could be set dynamically when scanning items)
-                TextView scannedQuantityTextView = new TextView(SevkiyatQR_ScreenActivity.this);
-                scannedQuantityTextView.setText("0"); // Default scanned quantity, can be updated
-                row.addView(scannedQuantityTextView);
+                row.addView(createTextView(detail.getMaterialName()));
+                row.addView(createTextView(detail.getAmount()));
+                row.addView(createTextView("0")); // Initial scanned count is 0
 
                 tableLayout.addView(row);
             }
         }
-    }
+
+        private TextView createTextView(String text) {
+            TextView textView = new TextView(SevkiyatQR_ScreenActivity.this);
+            textView.setText(text);
+            return textView;
+        }
+}
     @Override
     protected void onPause() {
         super.onPause();
@@ -454,6 +493,15 @@ class ReceiptItemManager {
     private final Map<String, String> scannedItems = new HashMap<>();
     private final List<ScannedQRItem> qrCodeCache = new ArrayList<>();
     private final DatabaseHelper databaseHelper;
+
+    public int getScannedCountForItem(String itemCode) {
+        // Count the occurrences of the itemCode in the scannedItems map
+        return (int) scannedItems.entrySet().stream()
+                .filter(entry -> entry.getValue().equals(receiptNo) && entry.getKey().contains(itemCode))
+                .count();
+    }
+
+
     // Single enum definition
     public enum ScanResult {
         SUCCESS, ALREADY_SCANNED, ITEM_NOT_IN_RECEIPT

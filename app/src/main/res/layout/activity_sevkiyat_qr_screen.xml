@@ -120,12 +120,8 @@
             android:id="@+id/confirm_receipt_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Confirm Receipt"
+            android:layout_marginTop="16dp"
             android:enabled="false"
-            android:layout_marginTop="16dp"/>
-
-        <com.example.A_Soft.CameraSourcePreview
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:text="Onayla" />
     </LinearLayout>
 </ScrollView>
