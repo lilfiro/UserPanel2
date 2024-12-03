@@ -97,17 +97,18 @@ public class DatabaseHelper {
 
     // Dynamic table name generation for Tiger Database
     public String getTigerDbTableName(String baseTableName) {
-        return String.format("TIGERDB.dbo.LG_%s_%s_%s", firmNumber, periodNumber, baseTableName);
+        return String.format("%s.dbo.LG_%s_%s_%s", tigerDatabaseName, firmNumber, periodNumber, baseTableName);
     }
 
     public String getTigerDbItemsTableName(String baseTableName) {
-        return String.format("TIGERDB.dbo.LG_%s_%s", firmNumber, baseTableName);
+        return String.format("%s.dbo.LG_%s_%s", tigerDatabaseName, firmNumber, baseTableName);
     }
 
     // Dynamic table name generation for Anatoliasoft Database
     public String getAnatoliaSoftTableName(String baseTableName) {
-        return String.format("ANATOLIASOFT.dbo.%s", baseTableName);
+        return String.format("%s.dbo.%s", anatoliaSoftDatabaseName, baseTableName);
     }
+
 
     // Generic method to execute a query on Tiger Database
     public ResultSet executeTigerQuery(String query, String... params) throws SQLException {
@@ -146,6 +147,7 @@ public class DatabaseHelper {
         }
     }
     // User check method with dynamic connection (kept from previous implementation)
+// User check method with dynamic connection (kept from previous implementation)
     public void checkUser(String username, String password, OnUserCheckListener listener) {
         new Thread(() -> {
             boolean userExists = performCheckUser(username, password);
@@ -160,7 +162,12 @@ public class DatabaseHelper {
     // Perform user check with dynamic connection
     private boolean performCheckUser(String checkUsername, String checkPassword) {
         try (Connection connection = getAnatoliaSoftConnection()) {
-            String sql = "SELECT * FROM AndroidTest.dbo.users WHERE username = ? AND password = ?";
+            // Dynamically build the SQL query based on the current configuration
+            String databaseName = getAnatoliaSoftDatabaseName();  // Dynamically use the configured DB name
+            String tableName = "dbo.A_CAPIUSER";  // Can also make this dynamic if needed (e.g., based on configuration)
+
+            String sql = String.format("SELECT * FROM %s.%s WHERE LOGOUSERNAME = ? AND LOGOUSERPASS = ?", databaseName, tableName);
+
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, checkUsername);
                 statement.setString(2, checkPassword);
@@ -173,6 +180,7 @@ public class DatabaseHelper {
             return false;
         }
     }
+
 
     // Getters for configuration values
     public String getServerAddress() { return serverAddress; }

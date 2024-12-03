@@ -72,7 +72,7 @@ public class SevkiyatMainActivity extends AppCompatActivity {
                 String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
                 String anatoliaSoftItemsTable = databaseHelper.getAnatoliaSoftTableName("AST_ITEMS");
                 String anatoliaSoftShipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
-                String anatoliaSoftCarsTable = databaseHelper.getAnatoliaSoftTableName("AST_CARS2");
+                String anatoliaSoftCarsTable = databaseHelper.getAnatoliaSoftTableName("AST_CARS");
 
                 String query = String.format(
                         "SELECT " +
