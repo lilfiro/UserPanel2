@@ -1,0 +1,131 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Table Layout for Malzemeler, Okutulacak Miktar, Okunan Miktar -->
+        <TableLayout
+            android:id="@+id/tableLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:stretchColumns="1"
+            android:paddingBottom="16dp">
+
+            <TableRow>
+                <TextView
+                    android:id="@+id/column_material"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Malzemeler"
+                    android:padding="8dp"
+                    android:gravity="center"/>
+
+                <TextView
+                    android:id="@+id/column_expected_quantity"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Okutulacak Miktar"
+                    android:padding="8dp"
+                    android:gravity="center"/>
+
+                <TextView
+                    android:id="@+id/column_scanned_quantity"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Okunan Miktar"
+                    android:padding="8dp"
+                    android:gravity="center"/>
+            </TableRow>
+
+            <!-- Empty rows for dynamic data population -->
+            <TableRow>
+                <TextView
+                    android:id="@+id/material_1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:gravity="center"/>
+
+                <TextView
+                    android:id="@+id/expected_quantity_1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:gravity="center"/>
+
+                <TextView
+                    android:id="@+id/scanned_quantity_1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:gravity="center"/>
+            </TableRow>
+
+            <TableRow>
+                <TextView
+                    android:id="@+id/material_2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:gravity="center"/>
+
+                <TextView
+                    android:id="@+id/expected_quantity_2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:gravity="center"/>
+
+                <TextView
+                    android:id="@+id/scanned_quantity_2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:gravity="center"/>
+            </TableRow>
+
+
+            <!-- You can add more rows as needed -->
+
+        </TableLayout>
+
+        <!-- QR Code Scanner -->
+        <com.example.A_Soft.CameraSourcePreview
+            android:id="@+id/camera_preview"
+            android:layout_width="match_parent"
+            android:layout_height="466dp" />
+        <TextView
+            android:id="@+id/notificationText"
+            android:layout_width="189dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center"
+            android:background="@android:color/black"
+            android:padding="8dp"
+            android:text="Scan a QR Code"
+            android:textColor="@android:color/white"
+            android:textSize="18sp"
+            android:visibility="invisible" />
+
+        <TextView
+            android:id="@+id/scan_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <Button
+            android:id="@+id/confirm_receipt_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Confirm Receipt"
+            android:enabled="false"
+            android:layout_marginTop="16dp"/>
+
+        <com.example.A_Soft.CameraSourcePreview
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </LinearLayout>
+</ScrollView>

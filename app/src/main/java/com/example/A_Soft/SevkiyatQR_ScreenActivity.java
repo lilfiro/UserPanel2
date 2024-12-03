@@ -1,5 +1,22 @@
 package com.example.A_Soft;
 
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.TableLayout;
+import android.widget.TableRow;
+import android.widget.TextView;
+
+import androidx.activity.EdgeToEdge;
+import androidx.appcompat.app.AppCompatActivity;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
+import android.Manifest;
+
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
@@ -17,10 +34,11 @@ import java.sql.ResultSetMetaData;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 
-import com.google.android.gms.vision.barcode.Barcode;
 import com.google.android.gms.vision.CameraSource;
 import com.google.android.gms.vision.Detector;
+import com.google.android.gms.vision.barcode.Barcode;
 import com.google.android.gms.vision.barcode.BarcodeDetector;
+
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -31,7 +49,6 @@ import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -39,85 +56,65 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 
-public class Sevkiyat_QR extends Fragment {
-    private static final String TAG = "Sevkiyat_QR";
-    private static final String ARG_FICHENO = "FICHENO";
+public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
+    private static final String TAG = "SevkiyatQR_ScreenActivity";
     private static final Pattern QR_SERIAL_PATTERN = Pattern.compile("KAREKODNO_([^|]+)");
-    private DatabaseHelper databaseHelper;
 
-    private String currentReceiptNo;
+    private TableLayout tableLayout;
     private CameraSourcePreview cameraPreview;
-    private ReceiptItemManager itemManager;
     private TextView scanStatusTextView;
     private Button confirmReceiptButton;
-    private boolean isPausedForConfirmation = false;
+    private DatabaseHelper databaseHelper;
+    private String currentReceiptNo;
+    private ReceiptItemManager itemManager;
     private ExecutorService executorService;
 
-    public static Sevkiyat_QR newInstance(String ficheNo) {
-        Sevkiyat_QR fragment = new Sevkiyat_QR();
-        Bundle args = new Bundle();
-        args.putString(ARG_FICHENO, ficheNo);
-        fragment.setArguments(args);
-        return fragment;
-    }
+    private long lastScanTime = 0;
+    private static final long SCAN_DEBOUNCE_INTERVAL = 2000; // 2 seconds
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        currentReceiptNo = getArguments() != null ?
-                getArguments().getString(ARG_FICHENO) : null;
-    }
+        setContentView(R.layout.activity_sevkiyat_qr_screen);
 
-    @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.sevkiyat_receipt_qr, container, false);
+        // Get the FICHENO from the intent
+        currentReceiptNo = getIntent().getStringExtra("FICHENO");
 
-        // Validate receipt number
-        if (isInvalidReceiptNumber()) return view;
-
-        initializeComponents(view);
+        // Initialize components
+        initializeComponents();
         setupBarcodeDetection();
         loadReceiptItems();
-
-        return view;
     }
 
-    private boolean isInvalidReceiptNumber() {
-        if (currentReceiptNo == null || currentReceiptNo.trim().isEmpty()) {
-            showToast("Geçersiz fiş numarası");
-            Log.e(TAG, "No valid receipt number provided");
-            return true;
-        }
-        return false;
-    }
-
-    private void initializeComponents(View view) {
+    private void initializeComponents() {
         // Initialize views
-        cameraPreview = view.findViewById(R.id.camera_preview);
-        scanStatusTextView = view.findViewById(R.id.scan_status);
-        confirmReceiptButton = view.findViewById(R.id.confirm_receipt_button);
+        tableLayout = findViewById(R.id.tableLayout);
+        cameraPreview = findViewById(R.id.camera_preview);
+        scanStatusTextView = findViewById(R.id.scan_status);
+        confirmReceiptButton = findViewById(R.id.confirm_receipt_button);
 
-        // Initialize DatabaseHelper with the context
-        DatabaseHelper dbHelper = new DatabaseHelper(requireContext()); // Pass the context
+        // Initialize DatabaseHelper
+        databaseHelper = new DatabaseHelper(this);
 
         // Setup executor and item manager
         executorService = Executors.newSingleThreadExecutor();
-        itemManager = new ReceiptItemManager(currentReceiptNo, dbHelper); // Pass both parameters
+        itemManager = new ReceiptItemManager(currentReceiptNo, databaseHelper);
+
+        // Start fetching data
+        new FetchItemsTask(databaseHelper).execute(currentReceiptNo);
 
         // Setup confirm button
         confirmReceiptButton.setOnClickListener(v -> {
             if (itemManager.areAllItemsScanned()) {
                 updateReceiptStatus();
             } else {
-                showToast("Tamamlanmadan önce tüm ürünler taratılmalıdır.");
+                Toast.makeText(this, "Tamamlanmadan önce tüm ürünler taratılmalıdır.", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
-
-
     private void setupBarcodeDetection() {
-        BarcodeDetector barcodeDetector = new BarcodeDetector.Builder(requireContext())
+        BarcodeDetector barcodeDetector = new BarcodeDetector.Builder(this)
                 .setBarcodeFormats(Barcode.QR_CODE)
                 .build();
 
@@ -126,7 +123,7 @@ public class Sevkiyat_QR extends Fragment {
             return;
         }
 
-        CameraSource cameraSource = new CameraSource.Builder(requireContext(), barcodeDetector)
+        CameraSource cameraSource = new CameraSource.Builder(this, barcodeDetector)
                 .setRequestedPreviewSize(640, 480)
                 .setAutoFocusEnabled(true)
                 .build();
@@ -147,8 +144,9 @@ public class Sevkiyat_QR extends Fragment {
         });
     }
 
-    private long lastScanTime = 0;
-    private static final long SCAN_DEBOUNCE_INTERVAL = 2000; // 2 seconds
+    private void showToast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
 
     private void processQRCode(String qrCodeData) {
         long currentTime = System.currentTimeMillis();
@@ -158,12 +156,9 @@ public class Sevkiyat_QR extends Fragment {
             return;
         }
 
-        if (isPausedForConfirmation)
-            return;
-
         try {
             if (!QR_SERIAL_PATTERN.matcher(qrCodeData).find()) {
-                showToast("Geçersiz Kare kod");
+                runOnUiThread(() -> Toast.makeText(this, "Geçersiz Kare kod", Toast.LENGTH_SHORT).show());
                 return;
             }
 
@@ -171,16 +166,18 @@ public class Sevkiyat_QR extends Fragment {
 
             executorService.submit(() -> {
                 ReceiptItemManager.ScanResult result = itemManager.cacheScannedItem(qrCodeData);
-                requireActivity().runOnUiThread(() -> {
+                runOnUiThread(() -> {
                     switch (result) {
                         case SUCCESS:
                             showItemConfirmationDialog(qrCodeData);
                             break;
                         case ALREADY_SCANNED:
                         case ITEM_NOT_IN_RECEIPT:
-                            showToast(result == ReceiptItemManager.ScanResult.ALREADY_SCANNED
-                                    ? "Bu ürün zaten tarandı."
-                                    : "Bu ürün sevkiyat planında yok.");
+                            Toast.makeText(this,
+                                    result == ReceiptItemManager.ScanResult.ALREADY_SCANNED
+                                            ? "Bu ürün zaten tarandı."
+                                            : "Bu ürün sevkiyat planında yok.",
+                                    Toast.LENGTH_SHORT).show();
                             break;
                     }
                     updateScanStatus();
@@ -188,44 +185,23 @@ public class Sevkiyat_QR extends Fragment {
             });
         } catch (Exception e) {
             Log.e(TAG, "QR Code processing error", e);
-            showToast("Karekod okunurken hata oluştu");
+            runOnUiThread(() -> Toast.makeText(this, "Karekod okunurken hata oluştu", Toast.LENGTH_SHORT).show());
         }
     }
 
     private void showItemConfirmationDialog(String serialNumber) {
-        isPausedForConfirmation = true;
         String itemCode = itemManager.extractItemCodeFromQR(serialNumber);
 
-        new AlertDialog.Builder(requireContext())
+        new AlertDialog.Builder(this)
                 .setTitle("Ürün okundu")
                 .setMessage("Ürünler: " + itemCode)
                 .setPositiveButton("Tamam", (dialog, which) -> {
-                    isPausedForConfirmation = false;
                     updateScanStatus();
                     confirmReceiptButton.setEnabled(itemManager.areAllItemsScanned());
                 })
                 .setCancelable(false)
                 .show();
     }
-
-    private void handleScanResult(ReceiptItemManager.ScanResult result, String serialNumber) {
-        String itemCode = itemManager.extractItemCodeFromQR(serialNumber);
-        switch (result) {
-            case ALREADY_SCANNED:
-                showToast("Bu ürün zaten tarandı: " + itemCode);
-                break;
-            case ITEM_NOT_IN_RECEIPT:
-                showToast("Bu ürün sevkiyat planında bulunmuyor: " + itemCode);
-                break;
-            case SUCCESS:
-                showToast("Ürün başarılı bir şekilde okundu: " + itemCode);
-                updateScanStatus();
-                confirmReceiptButton.setEnabled(itemManager.areAllItemsScanned());
-                break;
-        }
-    }
-
-
 
     private void updateScanStatus() {
         String status = String.format("Okunacak ürünler: %d/%d",
@@ -238,7 +214,7 @@ public class Sevkiyat_QR extends Fragment {
     private void loadReceiptItems() {
         executorService.submit(() -> {
             itemManager.loadReceiptItems();
-            requireActivity().runOnUiThread(this::updateScanStatus);
+            runOnUiThread(this::updateScanStatus);
         });
     }
 
@@ -253,40 +229,148 @@ public class Sevkiyat_QR extends Fragment {
 
                 int affected = databaseHelper.executeAnatoliaSoftUpdate(updateQuery, currentReceiptNo);
 
-                requireActivity().runOnUiThread(() -> {
+                runOnUiThread(() -> {
                     if (affected > 0 && itemsInserted) {
-                        showToast("Sevkiyat tamamlandı.");
-                        requireActivity().onBackPressed();
+                        Toast.makeText(this, "Sevkiyat tamamlandı.", Toast.LENGTH_SHORT).show();
+                        onBackPressed();
                     } else {
-                        showToast("Sevkiyat tamamlanamadı.");
+                        Toast.makeText(this, "Sevkiyat tamamlanamadı.", Toast.LENGTH_SHORT).show();
                     }
                 });
             } catch (SQLException e) {
                 Log.e(TAG, "Error updating receipt status", e);
-                requireActivity().runOnUiThread(() ->
-                        showToast("Sevkiyat tamamlanırken bir hata meydana geldi (SQL)."));
+                runOnUiThread(() ->
+                        Toast.makeText(this, "Sevkiyat tamamlanırken bir hata meydana geldi (SQL).", Toast.LENGTH_SHORT).show());
             }
         });
     }
 
-    private void showToast(String message) {
-        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
-    }
+    private class FetchItemsTask extends AsyncTask<String, Void, List<DraftReceipt>> {
 
-    @Override
-    public void onResume() {
-        super.onResume();
-        cameraPreview.startCamera();
-    }
+        private final DatabaseHelper databaseHelper;
 
+        public FetchItemsTask(DatabaseHelper databaseHelper) {
+            this.databaseHelper = databaseHelper;
+        }
+
+        @Override
+        protected List<DraftReceipt> doInBackground(String... params) {
+            List<DraftReceipt> detailsList = new ArrayList<>();
+            String ficheNo = params[0]; // Received FICHENO
+
+            // Prepare ficheNo for SQL IN clause
+            String[] ficheNos = ficheNo.split("/");
+            StringBuilder formattedFicheNo = new StringBuilder();
+            for (String fiche : ficheNos) {
+                if (formattedFicheNo.length() > 0) {
+                    formattedFicheNo.append("','");
+                }
+                formattedFicheNo.append(fiche.trim());
+            }
+            ficheNo = "'" + formattedFicheNo.toString() + "'";
+
+            try (Connection connection = databaseHelper.getTigerConnection()) {
+                // Use dynamic table names from DatabaseHelper
+                String tigerStFicheTable = databaseHelper.getTigerDbTableName("STFICHE");
+                String tigerStLineTable = databaseHelper.getTigerDbTableName("STLINE");
+                String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
+                String anatoliaSoftItemsTable = databaseHelper.getAnatoliaSoftTableName("AST_ITEMS");
+                String anatoliaSoftShipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
+
+                String query = String.format(
+                        "SELECT " +
+                                "IT.NAME AS [Malzeme Adı], " +
+                                "STRING_AGG(CAST(SL.AMOUNT AS VARCHAR), ', ') AS [Miktar] " +
+                                "FROM %s ST " +
+                                "INNER JOIN %s SL ON SL.STFICHEREF = ST.LOGICALREF " +
+                                "INNER JOIN %s IT ON IT.LOGICALREF = SL.STOCKREF " +
+                                "WHERE ST.TRCODE = 8 " +
+                                "AND ST.BILLED = 0 " +
+                                "AND ST.FICHENO IN (%s) " +
+                                "GROUP BY IT.NAME",
+                        tigerStFicheTable,
+                        tigerStLineTable,
+                        tigerItemsTable,
+                        ficheNo
+                );
+
+                try (PreparedStatement statement = connection.prepareStatement(query);
+                     ResultSet resultSet = statement.executeQuery()) {
+
+                    while (resultSet.next()) {
+                        detailsList.add(new DraftReceipt(
+                                resultSet.getString("Malzeme Adı"),
+                                resultSet.getString("Miktar")
+                        ));
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return detailsList;
+        }
+
+        @Override
+        protected void onPostExecute(List<DraftReceipt> details) {
+            // Remove existing rows (if any)
+            tableLayout.removeAllViews();
+
+            // Add table headers
+            TableRow headerRow = new TableRow(SevkiyatQR_ScreenActivity.this);
+            TextView headerMaterial = new TextView(SevkiyatQR_ScreenActivity.this);
+            headerMaterial.setText("Malzemeler");
+            headerRow.addView(headerMaterial);
+
+            TextView headerExpectedQuantity = new TextView(SevkiyatQR_ScreenActivity.this);
+            headerExpectedQuantity.setText("Okutulacak Miktar");
+            headerRow.addView(headerExpectedQuantity);
+
+            TextView headerScannedQuantity = new TextView(SevkiyatQR_ScreenActivity.this);
+            headerScannedQuantity.setText("Okunan Miktar");
+            headerRow.addView(headerScannedQuantity);
+
+            tableLayout.addView(headerRow);
+
+            // Add dynamic rows for each item
+            for (DraftReceipt detail : details) {
+                TableRow row = new TableRow(SevkiyatQR_ScreenActivity.this);
+
+                // Material name
+                TextView materialTextView = new TextView(SevkiyatQR_ScreenActivity.this);
+                materialTextView.setText(detail.getMaterialName());
+                row.addView(materialTextView);
+
+                // Expected quantity (can be fetched from the database or set as 0)
+                TextView expectedQuantityTextView = new TextView(SevkiyatQR_ScreenActivity.this);
+                expectedQuantityTextView.setText(detail.getAmount());
+                row.addView(expectedQuantityTextView);
+
+                // Scanned quantity (this could be set dynamically when scanning items)
+                TextView scannedQuantityTextView = new TextView(SevkiyatQR_ScreenActivity.this);
+                scannedQuantityTextView.setText("0"); // Default scanned quantity, can be updated
+                row.addView(scannedQuantityTextView);
+
+                tableLayout.addView(row);
+            }
+        }
+    }
     @Override
-    public void onPause() {
+    protected void onPause() {
         super.onPause();
-        cameraPreview.stopCamera();
+        if (cameraPreview != null) {
+            cameraPreview.stopCamera();
+        }
     }
 
     @Override
-    public void onDestroy() {
+    protected void onResume() {
+        super.onResume();
+        if (cameraPreview != null) {
+            cameraPreview.startCamera();
+        }
+    }
+    @Override
+    protected void onDestroy() {
         super.onDestroy();
         if (executorService != null) {
             executorService.shutdownNow();
@@ -312,55 +396,47 @@ class ReceiptItemManager {
 
     public void loadReceiptItems() {
         try (Connection conn = databaseHelper.getTigerConnection()) {
-            if (conn == null) {
-                Log.e(TAG, "Database connection is null");
-                return;
-            }
-            // Split receipt numbers and prepare for query
             String[] ficheNos = receiptNo.split("/");
             itemsToScan.clear();
             scannedItems.clear();
-            // Dynamically resolve table names using DatabaseHelper
+
             String tigerStFicheTable = databaseHelper.getTigerDbTableName("STFICHE");
             String tigerStLineTable = databaseHelper.getTigerDbTableName("STLINE");
             String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
 
-            // Prepare IN clause with sanitized receipt numbers
             String ficheNosList = Arrays.stream(ficheNos)
                     .map(no -> "'" + no.trim() + "'")
                     .collect(Collectors.joining(","));
 
-            // Build query dynamically
             String query = String.format(
                     "SELECT DISTINCT " +
                             "IT.CODE AS ItemCode, " +
-                            "IT.NAME AS ItemName " +
+                            "SUM(SL.AMOUNT) AS TotalQuantity " +
                             "FROM %s ST " +
                             "INNER JOIN %s SL ON SL.STFICHEREF = ST.LOGICALREF " +
                             "INNER JOIN %s IT ON IT.LOGICALREF = SL.STOCKREF " +
                             "WHERE ST.FICHENO IN (%s) " +
                             "AND ST.TRCODE = 8 " +
-                            "AND ST.BILLED = 0",
+                            "AND ST.BILLED = 0 " +
+                            "GROUP BY IT.CODE",
                     tigerStFicheTable, tigerStLineTable, tigerItemsTable, ficheNosList
             );
-            // Execute query and process results
+
             try (PreparedStatement stmt = conn.prepareStatement(query);
                  ResultSet rs = stmt.executeQuery()) {
 
                 while (rs.next()) {
                     String itemCode = rs.getString("ItemCode");
-                    String itemName = rs.getString("ItemName");
-                    List<Item> itemsToScan = new ArrayList<>();
+                    double totalQuantity = rs.getDouble("TotalQuantity");
 
+                    // Initialize item as not scanned
+                    itemsToScan.put(itemCode, false);
                 }
-
-            } catch (SQLException e) {
-                Log.e(TAG, "Error executing query: " + e.getMessage(), e);
             }
         } catch (SQLException e) {
-            Log.e(TAG, "Error establishing database connection: " + e.getMessage(), e);
+            Log.e(TAG, "Error loading receipt items: " + e.getMessage(), e);
         }
-}
+    }
     private String extractSerialNumber(String qrCode) {
         int startIndex = qrCode.indexOf("KAREKODNO_");
         if (startIndex != -1) {
@@ -525,6 +601,7 @@ class ReceiptItemManager {
 class CameraSourcePreview extends ViewGroup {
     private SurfaceView surfaceView;
     private CameraSource cameraSource;
+    private boolean isCameraStarted = false;
 
     public CameraSourcePreview(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -532,7 +609,9 @@ class CameraSourcePreview extends ViewGroup {
         surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
-                startCamera();
+                if (cameraSource != null && !isCameraStarted) {
+                    startCamera();
+                }
             }
 
             @Override
@@ -548,13 +627,14 @@ class CameraSourcePreview extends ViewGroup {
 
     public void setCameraSource(CameraSource cameraSource) {
         this.cameraSource = cameraSource;
+        isCameraStarted = false;
     }
 
     public void startCamera() {
-        if (cameraSource != null) {
+        if (cameraSource != null && !isCameraStarted) {
             try {
                 cameraSource.start(surfaceView.getHolder());
-                // Kamera açmayı reddederse program patlıyor, düzeltilecek
+                isCameraStarted = true;
             } catch (IOException e) {
                 Log.e("CameraPreview", "Error starting camera", e);
             }
@@ -564,6 +644,7 @@ class CameraSourcePreview extends ViewGroup {
     public void stopCamera() {
         if (cameraSource != null) {
             cameraSource.stop();
+            isCameraStarted = false;
         }
     }
 

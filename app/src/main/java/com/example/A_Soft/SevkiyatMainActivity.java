@@ -9,7 +9,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.text.ParseException;
@@ -39,7 +38,8 @@ public class SevkiyatMainActivity extends AppCompatActivity {
             public void onItemClick(DraftReceipt receipt) {
                 // Only navigate if the receipt is not completed
                 if (!receipt.getStatus().contains("TAMAMLANDI")) {
-                    Intent intent = new Intent(SevkiyatMainActivity.this, SevkiyatInvoiceFragmentActivity.class);
+                    //Intent intent = new Intent(SevkiyatMainActivity.this, SevkiyatInvoiceFragmentActivity.class);
+                    Intent intent = new Intent(SevkiyatMainActivity.this, SevkiyatQR_ScreenActivity.class);
                     intent.putExtra("FICHENO", receipt.getOprFicheNo());
                     startActivity(intent);
                 }
@@ -72,32 +72,34 @@ public class SevkiyatMainActivity extends AppCompatActivity {
                 String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
                 String anatoliaSoftItemsTable = databaseHelper.getAnatoliaSoftTableName("AST_ITEMS");
                 String anatoliaSoftShipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
+                String anatoliaSoftCarsTable = databaseHelper.getAnatoliaSoftTableName("AST_CARS2");
 
                 String query = String.format(
                         "SELECT " +
                                 "SP.ORGNR AS [Fiş No], " +
                                 "SP.SLIPNR AS [Fiş Kodu], " +
-                                "STRING_AGG(IT.CODE, ', ') AS [Malzeme Kodu], " +
-                                "STRING_AGG(IT.NAME, ', ') AS [Malzeme Adı], " +
                                 "STRING_AGG(CAST(SL.AMOUNT AS VARCHAR), ', ') AS [Miktar], " +
-                                "SP.SLIPDATE AS [Tarih], " +
                                 "COUNT(DISTINCT IT.LOGICALREF) AS [Toplam Kalem Sayısı], " +
+                                "SP.SLIPDATE AS [Tarih], " +
+                                "AC.ARAC_PLAKA AS [Araç Plaka], " +
                                 "SP.STATUS AS [Durum] " +
                                 "FROM %s ST " +
                                 "INNER JOIN %s SL ON SL.STFICHEREF = ST.LOGICALREF " +
                                 "INNER JOIN %s IT ON IT.LOGICALREF = SL.STOCKREF " +
                                 "LEFT JOIN %s AI ON AI.CODE = IT.CODE " +
                                 "LEFT JOIN %s SP ON SP.SLIPNR = ST.FICHENO " +
+                                "LEFT JOIN %S AC ON AC.ARAC_KODU = SP.CARID " +
                                 "WHERE ST.TRCODE = 8 " +
                                 "AND ST.BILLED = 0 " +
                                 "AND SP.ORGNR  IS NOT NULL " +
                                 "AND (SP.STATUS = 0 OR SP.STATUS = 1) " +
-                                "GROUP BY SP.ORGNR, SP.SLIPNR, SP.SLIPDATE, SP.STATUS",
+                                "GROUP BY SP.ORGNR, SP.SLIPNR, SP.SLIPDATE, SP.STATUS, AC.ARAC_PLAKA",
                         tigerStFicheTable,
                         tigerStLineTable,
                         tigerItemsTable,
                         anatoliaSoftItemsTable,
-                        anatoliaSoftShipPlanTable
+                        anatoliaSoftShipPlanTable,
+                        anatoliaSoftCarsTable
                 );
 
                 try (PreparedStatement statement = connection.prepareStatement(query);
@@ -108,8 +110,7 @@ public class SevkiyatMainActivity extends AppCompatActivity {
                         String formattedDate = formatDate(date);
                         String receiptNo = resultSet.getString("Fiş No");
                         String ficheNo = resultSet.getString("Fiş Kodu");
-                        String materialCode = resultSet.getString("Malzeme Kodu");
-                        String materialName = resultSet.getString("Malzeme Adı");
+                        String carPlate = resultSet.getString("Araç Plaka");  // Fetch the car plate
                         String amount = resultSet.getString("Miktar");
                         int itemCount = resultSet.getInt("Toplam Kalem Sayısı");
                         String status;
@@ -121,13 +122,13 @@ public class SevkiyatMainActivity extends AppCompatActivity {
 
                         DraftReceipt draft = new DraftReceipt(
                                 formattedDate,
-                                materialCode,
-                                materialName,
-                                amount,
-                                receiptNo,
+                                amount,      // Pass amount here
                                 status,
-                                ficheNo
+                                ficheNo,
+                                carPlate,    // Pass car plate here
+                                receiptNo    // Pass receipt number here
                         );
+
                         drafts.add(draft);
                     }
                 }
@@ -136,6 +137,7 @@ public class SevkiyatMainActivity extends AppCompatActivity {
             }
             return drafts;
         }
+
 
         @Override
         protected void onPostExecute(List<DraftReceipt> drafts) {

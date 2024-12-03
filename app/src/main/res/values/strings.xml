@@ -7,4 +7,5 @@
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="title_activity_sevkiyat_giris">sevkiyat_giris</string>
     <string name="title_activity_dbsettings">DBSettingsActivity</string>
+    <string name="title_activity_sevkiyat_qr_screen">SevkiyatQR_Screen</string>
 </resources>

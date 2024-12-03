@@ -1,4 +1,5 @@
 package com.example.A_Soft;
+
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -40,33 +41,24 @@ public class UpcomingSchedulesAdapter extends RecyclerView.Adapter<UpcomingSched
     }
 
     public class ViewHolder extends RecyclerView.ViewHolder {
-        private TextView dateTextView;
-        private TextView receiptNoTextView;
-        private TextView materialCodeTextView;
-        private TextView materialNameTextView;
-        private TextView amountTextView;
-        private TextView statusTextView;
+        private TextView dateTextView, receiptNoTextView, materialCodeTextView, materialNameTextView, amountTextView, statusTextView, carPlateTextView;
 
         public ViewHolder(View itemView) {
             super(itemView);
             dateTextView = itemView.findViewById(R.id.dateTextView);
             receiptNoTextView = itemView.findViewById(R.id.receiptNoTextView);
-            materialCodeTextView = itemView.findViewById(R.id.materialCodeTextView);
-            materialNameTextView = itemView.findViewById(R.id.materialNameTextView);
-            amountTextView = itemView.findViewById(R.id.amountTextView);
             statusTextView = itemView.findViewById(R.id.statusTextView);
+            carPlateTextView = itemView.findViewById(R.id.carPlateTextView);
         }
 
         public void bind(final DraftReceipt receipt, final OnItemClickListener listener) {
             statusTextView.setText(receipt.getStatus());
             dateTextView.setText("Tarih: " + receipt.getDate());
             receiptNoTextView.setText("Fiş No: " + receipt.getReceiptNo());
-            materialCodeTextView.setText("Malzeme Kodu: " + receipt.getMaterialCode());
-            materialNameTextView.setText("Malzeme Adı: " + receipt.getMaterialName());
-            amountTextView.setText("Miktar: " + receipt.getAmount());
+            carPlateTextView.setText("Araç Plaka: " + receipt.getCarPlate());
 
             // Disable clicking for completed invoices
-            if (receipt.getStatus().contains("TAMAMLANDI")) {
+            if (receipt.getStatus() != null && receipt.getStatus().contains("TAMAMLANDI")) {
                 itemView.setClickable(false);
                 itemView.setEnabled(false);
                 itemView.setAlpha(0.5f); // Optional: make it visually less prominent
