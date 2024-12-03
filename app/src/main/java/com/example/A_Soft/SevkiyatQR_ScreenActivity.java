@@ -377,6 +377,65 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         }
     }
 }
+
+class CameraSourcePreview extends ViewGroup {
+    private SurfaceView surfaceView;
+    private CameraSource cameraSource;
+    private boolean isCameraStarted = false;
+
+    public CameraSourcePreview(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        surfaceView = new SurfaceView(context);
+        surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
+            @Override
+            public void surfaceCreated(SurfaceHolder holder) {
+                if (cameraSource != null && !isCameraStarted) {
+                    startCamera();
+                }
+            }
+
+            @Override
+            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {}
+
+            @Override
+            public void surfaceDestroyed(SurfaceHolder holder) {
+                stopCamera();
+            }
+        });
+        addView(surfaceView);
+    }
+
+    public void setCameraSource(CameraSource cameraSource) {
+        this.cameraSource = cameraSource;
+        isCameraStarted = false;
+    }
+
+    public void startCamera() {
+        if (cameraSource != null && !isCameraStarted) {
+            try {
+                cameraSource.start(surfaceView.getHolder());
+                isCameraStarted = true;
+            } catch (IOException e) {
+                Log.e("CameraPreview", "Error starting camera", e);
+            }
+        }
+    }
+
+    public void stopCamera() {
+        if (cameraSource != null) {
+            cameraSource.stop();
+            isCameraStarted = false;
+        }
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        int width = right - left;
+        int height = bottom - top;
+        surfaceView.layout(0, 0, width, height);
+    }
+
+}
 class ReceiptItemManager {
     private static final String TAG = "ReceiptItemManager";
     private final String receiptNo;
@@ -597,62 +656,4 @@ class ReceiptItemManager {
             return ScanResult.ITEM_NOT_IN_RECEIPT;
         }
     }
-}
-class CameraSourcePreview extends ViewGroup {
-    private SurfaceView surfaceView;
-    private CameraSource cameraSource;
-    private boolean isCameraStarted = false;
-
-    public CameraSourcePreview(Context context, AttributeSet attrs) {
-        super(context, attrs);
-        surfaceView = new SurfaceView(context);
-        surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
-            @Override
-            public void surfaceCreated(SurfaceHolder holder) {
-                if (cameraSource != null && !isCameraStarted) {
-                    startCamera();
-                }
-            }
-
-            @Override
-            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {}
-
-            @Override
-            public void surfaceDestroyed(SurfaceHolder holder) {
-                stopCamera();
-            }
-        });
-        addView(surfaceView);
-    }
-
-    public void setCameraSource(CameraSource cameraSource) {
-        this.cameraSource = cameraSource;
-        isCameraStarted = false;
-    }
-
-    public void startCamera() {
-        if (cameraSource != null && !isCameraStarted) {
-            try {
-                cameraSource.start(surfaceView.getHolder());
-                isCameraStarted = true;
-            } catch (IOException e) {
-                Log.e("CameraPreview", "Error starting camera", e);
-            }
-        }
-    }
-
-    public void stopCamera() {
-        if (cameraSource != null) {
-            cameraSource.stop();
-            isCameraStarted = false;
-        }
-    }
-
-    @Override
-    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-        int width = right - left;
-        int height = bottom - top;
-        surfaceView.layout(0, 0, width, height);
-    }
-
 }
