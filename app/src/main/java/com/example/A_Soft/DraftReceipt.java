@@ -1,27 +1,26 @@
 package com.example.A_Soft;
 
 public class DraftReceipt {
-    private String date;
-    private String materialCode;
-    private String materialName;
-    private String amount;
-    private String receiptNo;
-    private String status;
-    private String oprFicheNo;
+    private String date, materialCode, materialName, amount, receiptNo, status, oprFicheNo, carPlate;
 
-    // Updated constructor to match the query results
-// Updated constructor
-    public DraftReceipt(String date, String materialCode, String materialName,
-                        String amount, String receiptNo, String status, String oprFicheNo) {
-        this.date = date;
-        this.materialCode = materialCode;
+    public DraftReceipt(String materialName, String amount) {
         this.materialName = materialName;
         this.amount = amount;
-        this.receiptNo = receiptNo;
-        this.status = status;
-        this.oprFicheNo = oprFicheNo;
+        this.date = null;
+        this.materialCode = null;
+        this.receiptNo = null;
+        this.status = null;
+        this.oprFicheNo = null;
     }
 
+    public DraftReceipt(String date, String amount, String status, String oprFicheNo, String carPlate, String receiptNo) {
+        this.date = date;
+        this.amount = amount;
+        this.status = status;
+        this.oprFicheNo = oprFicheNo;
+        this.carPlate = carPlate;
+        this.receiptNo = receiptNo;
+    }
     // Getters and setters
     public String getDate() {
         return date;
@@ -54,7 +53,9 @@ public class DraftReceipt {
     public void setAmount(String amount) {
         this.amount = amount;
     }
-
+    public String getCarPlate() {
+        return carPlate;
+    }
     public String getReceiptNo() {
         return receiptNo;
     }

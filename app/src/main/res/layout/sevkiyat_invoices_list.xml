@@ -37,29 +37,11 @@
             android:layout_height="wrap_content"
             android:text="Fatura No: 12345"
             android:textColor="#555" />
-
-        <!-- Material Code TextView -->
         <TextView
-            android:id="@+id/materialCodeTextView"
+            android:id="@+id/carPlateTextView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Malzeme Kodu: ABC123"
-            android:textColor="#555" />
-
-        <!-- Material Name TextView -->
-        <TextView
-            android:id="@+id/materialNameTextView"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Malzeme Adı: Item Name"
-            android:textColor="#555" />
-
-        <!-- Amount TextView -->
-        <TextView
-            android:id="@+id/amountTextView"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Miktar: 10"
+            android:text="Araç Plaka: 34 PLT 34"
             android:textColor="#555" />
 
     </LinearLayout>

@@ -24,10 +24,6 @@ public class MyPagerAdapter extends FragmentStateAdapter {
 
     // Add fragments and handle specific cases (e.g., Sevkiyat_QR)
     public void addFragment(Fragment fragment, String title) {
-        if (fragment instanceof Sevkiyat_QR && ficheNo != null) {
-            // Create a new instance of Sevkiyat_QR with ficheNo
-            fragment = Sevkiyat_QR.newInstance(ficheNo);
-        }
         fragments.add(fragment);
         fragmentTitles.add(title);
     }
