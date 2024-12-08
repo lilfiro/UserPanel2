@@ -213,11 +213,11 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         layout.setPadding(20, 20, 20, 20);
 
         final EditText kareKodInput = new EditText(this);
-        kareKodInput.setHint("KAREKODNO");
+        kareKodInput.setHint("Stok Kodu");
         layout.addView(kareKodInput);
 
         final EditText barcodeInput = new EditText(this);
-        barcodeInput.setHint("Barkod");
+        barcodeInput.setHint("Lot No");
         layout.addView(barcodeInput);
 
         builder.setView(layout);
@@ -260,7 +260,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         }
 
         CameraSource cameraSource = new CameraSource.Builder(this, barcodeDetector)
-                .setRequestedPreviewSize(640, 480)
+                .setRequestedPreviewSize(480, 480)
                 .setAutoFocusEnabled(true)
                 .build();
 
