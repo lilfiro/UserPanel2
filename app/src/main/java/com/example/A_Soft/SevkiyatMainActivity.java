@@ -67,39 +67,37 @@ public class SevkiyatMainActivity extends AppCompatActivity {
             List<DraftReceipt> drafts = new ArrayList<>();
             try (Connection connection = databaseHelper.getTigerConnection()) {
                 // Dynamic table names using DatabaseHelper methods
-                String tigerStFicheTable = databaseHelper.getTigerDbTableName("STFICHE");
-                String tigerStLineTable = databaseHelper.getTigerDbTableName("STLINE");
-                String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
-                String anatoliaSoftItemsTable = databaseHelper.getAnatoliaSoftTableName("AST_ITEMS");
                 String anatoliaSoftShipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
+                String anatoliaSoftShipPlanLineTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLANLINE");
                 String anatoliaSoftCarsTable = databaseHelper.getAnatoliaSoftTableName("AST_CARS");
+                String anatoliaSoftItemsTable = databaseHelper.getAnatoliaSoftTableName("AST_ITEMS");
+                String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
+                String tigerStLineTable = databaseHelper.getTigerDbTableName("STLINE");
 
                 String query = String.format(
                         "SELECT " +
-                                "SP.ORGNR AS [Fiş No], " +
-                                "SP.SLIPNR AS [Fiş Kodu], " +
-                                "STRING_AGG(CAST(SL.AMOUNT AS VARCHAR), ', ') AS [Miktar], " +
+                                "SHP.ORGNR AS [Fiş No], " +
+                                "SHP.SLIPNR AS [Fiş Kodu], " +
+                                "STRING_AGG(CAST(STL.AMOUNT AS VARCHAR), ',') AS [Miktar], " +
                                 "COUNT(DISTINCT IT.LOGICALREF) AS [Toplam Kalem Sayısı], " +
-                                "SP.SLIPDATE AS [Tarih], " +
+                                "SHP.SLIPDATE AS [Tarih], " +
                                 "AC.ARAC_PLAKA AS [Araç Plaka], " +
-                                "SP.STATUS AS [Durum] " +
-                                "FROM %s ST " +
-                                "INNER JOIN %s SL ON SL.STFICHEREF = ST.LOGICALREF " +
-                                "INNER JOIN %s IT ON IT.LOGICALREF = SL.STOCKREF " +
-                                "LEFT JOIN %s AI ON AI.CODE = IT.CODE " +
-                                "LEFT JOIN %s SP ON SP.SLIPNR = ST.FICHENO " +
-                                "LEFT JOIN %S AC ON AC.ARAC_KODU = SP.CARID " +
-                                "WHERE ST.TRCODE = 8 " +
-                                "AND ST.BILLED = 0 " +
-                                "AND SP.ORGNR  IS NOT NULL " +
-                                "AND (SP.STATUS = 0 OR SP.STATUS = 1) " +
-                                "GROUP BY SP.ORGNR, SP.SLIPNR, SP.SLIPDATE, SP.STATUS, AC.ARAC_PLAKA",
-                        tigerStFicheTable,
-                        tigerStLineTable,
-                        tigerItemsTable,
-                        anatoliaSoftItemsTable,
+                                "SHP.STATUS AS [Durum], " +
+                                "SUM(SHPL.QUANTITY) AS [Total Quantity], " +
+                                "SUM(SHPL.TOTALWEIGHT) AS [Total Weight] " +
+                                "FROM %s SHP " +
+                                "LEFT JOIN %s SHPL ON SHP.ID = SHPL.SHIPPLANID " +
+                                "LEFT JOIN %s AC ON AC.ARAC_KODU = SHP.CARID " +
+                                "LEFT JOIN %s ITM ON ITM.ID = SHPL.ERPITEMID " +
+                                "LEFT JOIN %s IT ON IT.LOGICALREF = SHPL.ERPITEMID " +
+                                "LEFT JOIN %s STL ON STL.LOGICALREF = SHPL.ERPDESPATCHLINEID " +
+                                "GROUP BY SHP.STATUS, AC.ARAC_PLAKA, SHP.SLIPDATE, SHP.SLIPNR, SHP.ORGNR",
                         anatoliaSoftShipPlanTable,
-                        anatoliaSoftCarsTable
+                        anatoliaSoftShipPlanLineTable,
+                        anatoliaSoftCarsTable,
+                        anatoliaSoftItemsTable,
+                        tigerItemsTable,
+                        tigerStLineTable
                 );
 
                 try (PreparedStatement statement = connection.prepareStatement(query);
@@ -137,6 +135,7 @@ public class SevkiyatMainActivity extends AppCompatActivity {
             }
             return drafts;
         }
+
 
 
         @Override

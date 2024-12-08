@@ -1,5 +1,6 @@
 package com.example.A_Soft;
 
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -8,9 +9,13 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+
 public class DatabaseConfigActivity extends AppCompatActivity {
     public EditText etServerAddress, etServerPort, etTigerDatabaseName, etAnatoliaSoftDatabaseName, etUsername, etPassword, etFirmNumber, etPeriodNumber;
-    public Button btnSaveConfig;
+    public Button btnSaveConfig, btnTestConnection;
     public DatabaseHelper databaseHelper;
 
     @Override
@@ -31,6 +36,8 @@ public class DatabaseConfigActivity extends AppCompatActivity {
         etFirmNumber = findViewById(R.id.et_firm_number);
         etPeriodNumber = findViewById(R.id.et_period_number);
         btnSaveConfig = findViewById(R.id.btn_save_config);
+        btnTestConnection = findViewById(R.id.btn_test_connection); // Add this button in your XML layout
+
 
         // Load existing configuration
         loadCurrentConfiguration();
@@ -42,7 +49,17 @@ public class DatabaseConfigActivity extends AppCompatActivity {
                 saveConfiguration();
             }
         });
+
+        // Set up test connection button
+        btnTestConnection.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                testDatabaseConnection();
+            }
+        });
     }
+
+
 
     private void loadCurrentConfiguration() {
         etServerAddress.setText(databaseHelper.getServerAddress());
@@ -80,5 +97,62 @@ public class DatabaseConfigActivity extends AppCompatActivity {
 
         // Optionally, finish the activity or do something else
         finish();
+    }
+
+
+    private void testDatabaseConnection() {
+        String serverAddress = etServerAddress.getText().toString().trim();
+        String serverPort = etServerPort.getText().toString().trim();
+        String username = etUsername.getText().toString().trim();
+        String password = etPassword.getText().toString().trim();
+        String databaseName = etTigerDatabaseName.getText().toString().trim();
+
+        if (serverAddress.isEmpty() || serverPort.isEmpty() || username.isEmpty() || password.isEmpty() || databaseName.isEmpty()) {
+            showMessageDialog("Uyarı", "Lütfen tüm alanları doldurun.");
+            return;
+        }
+
+        new Thread(() -> {
+            Connection connection = null;
+            try {
+                String connectionUrl = "jdbc:jtds:sqlserver://" + serverAddress + ":" + serverPort + "/" + databaseName;
+                connection = DriverManager.getConnection(connectionUrl, username, password);
+
+                runOnUiThread(() -> showMessageDialog("Başarılı", "Veritabanı bağlantıları başarıyla sonuçlandı."));
+            } catch (SQLException e) {
+                String errorMessage = getDetailedError(e);
+                runOnUiThread(() -> showMessageDialog("Bağlantı Başarısız", errorMessage));
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException ignored) {
+                    }
+                }
+            }
+        }).start();
+    }
+
+    private String getDetailedError(SQLException e) {
+        StringBuilder errorDetails = new StringBuilder("Bağlantı sırasında bir hata meydana geldi:\n");
+        errorDetails.append(e.getMessage());
+
+        // Optionally include more detailed error info
+        Throwable cause = e.getCause();
+        if (cause != null) {
+            errorDetails.append("\nSebep: ").append(cause.getMessage());
+        }
+
+        return errorDetails.toString();
+    }
+
+    private void showMessageDialog(String title, String message) {
+        runOnUiThread(() -> {
+            new AlertDialog.Builder(this)
+                    .setTitle(title)
+                    .setMessage(message)
+                    .setPositiveButton("Tamam", null)
+                    .show();
+        });
     }
 }

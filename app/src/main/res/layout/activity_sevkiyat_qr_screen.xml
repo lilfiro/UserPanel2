@@ -14,7 +14,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:stretchColumns="1"
-            android:paddingBottom="16dp">
+            android:paddingBottom="100dp">
 
             <TableRow>
                 <TextView
@@ -89,20 +89,18 @@
                     android:gravity="center"/>
             </TableRow>
 
-
-            <!-- You can add more rows as needed -->
-
         </TableLayout>
 
         <!-- QR Code Scanner -->
         <com.example.A_Soft.CameraSourcePreview
             android:id="@+id/camera_preview"
             android:layout_width="match_parent"
-            android:layout_height="466dp" />
+            android:layout_height="450dp" />
+
         <TextView
             android:id="@+id/notificationText"
             android:layout_width="189dp"
-            android:layout_height="wrap_content"
+            android:layout_height="24dp"
             android:layout_gravity="top|center"
             android:background="@android:color/black"
             android:padding="8dp"
@@ -114,14 +112,31 @@
         <TextView
             android:id="@+id/scan_status"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
+            android:layout_height="40dp"
+            android:text="Okutulacak ürünler:" />
 
-        <Button
-            android:id="@+id/confirm_receipt_button"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:enabled="false"
-            android:text="Onayla" />
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/confirm_receipt_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="0dp"
+                android:enabled="false"
+                android:text="Onayla" />
+
+            <Button
+                android:id="@+id/manual_qr_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="0dp"
+                android:layout_marginStart="8dp"
+                android:text="Manuel Ürün Gir" />
+
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>
