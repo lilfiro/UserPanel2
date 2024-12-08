@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Table for scanned items -->
+        <TableLayout
+            android:id="@+id/tableLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:stretchColumns="*"
+            android:padding="2dp"
+            android:background="@android:color/white">
+        </TableLayout>
+        <!-- Camera Preview -->
+        <com.example.A_Soft.CameraSourcePreview
+            android:id="@+id/camera_preview"
+            android:layout_width="match_parent"
+            android:layout_height="400dp"
+            android:layout_marginTop="16dp" />
+
+        <!-- Scan Status -->
+        <TextView
+            android:id="@+id/scan_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Toplam Okutulan: 0"
+            android:textSize="16sp" />
+
+        <!-- Buttons Container -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="16dp"
+            android:gravity="center_horizontal">
+
+            <Button
+                android:id="@+id/saveButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Kaydet"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/confirmButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Onayla"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/manual_qr_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Manuel Ürün Gir" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</ScrollView>

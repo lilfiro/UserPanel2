@@ -22,7 +22,7 @@ public class HomeActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 // Navigate to UretimActivity
-                startActivity(new Intent(HomeActivity.this, FragmentActivity.class));
+                startActivity(new Intent(HomeActivity.this, UretimMainActivity.class));
             }
         });
 
