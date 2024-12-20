@@ -18,52 +18,61 @@
             android:padding="2dp"
             android:background="@android:color/white">
         </TableLayout>
+        <Button
+            android:id="@+id/scanned_items_button"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginLeft="8dp"
+            android:layout_gravity="end"
+            android:text="" />
         <!-- Camera Preview -->
         <com.example.A_Soft.CameraSourcePreview
             android:id="@+id/camera_preview"
             android:layout_width="match_parent"
-            android:layout_height="400dp"
-            android:layout_marginTop="16dp" />
+            android:layout_height="440dp" />
 
         <!-- Scan Status -->
         <TextView
             android:id="@+id/scan_status"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Toplam Okutulan: 0"
-            android:textSize="16sp" />
+            android:layout_height="40dp"
+            android:text="Toplam Okutulan: 0"/>
 
         <!-- Buttons Container -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="16dp"
-            android:gravity="center_horizontal">
+            android:gravity="center">
+
 
             <Button
                 android:id="@+id/saveButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Kaydet"
-                android:layout_marginEnd="8dp" />
-
-            <Button
-                android:id="@+id/confirmButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Onayla"
-                android:layout_marginEnd="8dp" />
+                android:layout_marginTop="0dp"
+                android:layout_marginLeft="8dp"
+                android:text="Taslak Kaydet" />
 
             <Button
                 android:id="@+id/manual_qr_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Manuel Ürün Gir" />
+                android:layout_marginTop="0dp"
+                android:layout_marginLeft="8dp"
+                android:text="Manuel Ürün Ekle" />
+
 
         </LinearLayout>
-
+        <Button
+            android:id="@+id/confirmButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
+            android:layout_gravity="center"
+            android:enabled="false"
+            android:text="Onayla" />
     </LinearLayout>
 
 </ScrollView>

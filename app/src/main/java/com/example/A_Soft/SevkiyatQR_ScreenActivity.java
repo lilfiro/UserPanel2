@@ -183,6 +183,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         editor.apply();
 
         Toast.makeText(this, "Taslak kaydedildi", Toast.LENGTH_SHORT).show();
+        //finish();
     }
 
     private void loadDraftData() {
