@@ -95,7 +95,7 @@
         <com.example.A_Soft.CameraSourcePreview
             android:id="@+id/camera_preview"
             android:layout_width="match_parent"
-            android:layout_height="450dp" />
+            android:layout_height="440dp" />
 
         <TextView
             android:id="@+id/notificationText"
@@ -121,22 +121,32 @@
             android:orientation="horizontal"
             android:gravity="center">
 
+
             <Button
-                android:id="@+id/confirm_receipt_button"
+                android:id="@+id/save_draft_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="0dp"
-                android:enabled="false"
-                android:text="Onayla" />
+                android:layout_marginLeft="8dp"
+                android:text="Taslak Kaydet" />
 
             <Button
                 android:id="@+id/manual_qr_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="0dp"
-                android:layout_marginStart="8dp"
-                android:text="Manuel Ürün Gir" />
+                android:layout_marginLeft="8dp"
+                android:text="Manuel Ürün Ekle" />
+
 
         </LinearLayout>
+        <Button
+            android:id="@+id/confirm_receipt_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
+            android:layout_gravity="center"
+            android:enabled="false"
+            android:text="Onayla" />
     </LinearLayout>
 </ScrollView>

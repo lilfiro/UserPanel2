@@ -67,8 +67,8 @@ public class DatabaseHelper {
         serverPort = prefs.getString(KEY_SERVER_PORT, "1433");
         tigerDatabaseName = prefs.getString(KEY_TIGER_DB_NAME, "TIGERDB");
         anatoliaSoftDatabaseName = prefs.getString(KEY_ANATOLIASOFT_DB_NAME, "ANATOLIASOFT");
-        username = prefs.getString(KEY_USERNAME, "androidemu");
-        password = prefs.getString(KEY_PASSWORD, "AndroidEmu123");
+        username = prefs.getString(KEY_USERNAME, "sa");
+        password = prefs.getString(KEY_PASSWORD, "sa");
         firmNumber = prefs.getString(KEY_FIRM_NUMBER, "001");
         periodNumber = prefs.getString(KEY_PERIOD_NUMBER, "01");
     }

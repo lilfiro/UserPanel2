@@ -13,7 +13,6 @@ import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
 
-import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.sql.Connection;
@@ -26,22 +25,16 @@ import android.Manifest;
 
 import android.app.AlertDialog;
 import android.content.Context;
-import android.os.Bundle;
 import android.util.AttributeSet;
 import android.util.Log;
-import android.view.LayoutInflater;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
-import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.TextView;
 import android.widget.Toast;
-import java.sql.ResultSetMetaData;
-import androidx.annotation.NonNull;
+
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.fragment.app.Fragment;
 
 import com.google.android.gms.vision.CameraSource;
 import com.google.android.gms.vision.Detector;
@@ -49,14 +42,9 @@ import com.google.android.gms.vision.barcode.Barcode;
 import com.google.android.gms.vision.barcode.BarcodeDetector;
 
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -64,6 +52,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import android.content.SharedPreferences;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
 
 
 public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
@@ -82,16 +75,27 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     private long lastScanTime = 0;
     private static final long SCAN_DEBOUNCE_INTERVAL = 2000; // 2 seconds
 
+    private static final String PREF_NAME = "SevkiyatDrafts";
+    private static final String KEY_DRAFT_DATA = "draft_data";
+    private Button saveAsDraftButton;
+    private SharedPreferences sharedPreferences;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sevkiyat_qr_screen);
+
+        // Initialize SharedPreferences
+        sharedPreferences = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
 
         // Get the FICHENO from the intent
         currentReceiptNo = getIntent().getStringExtra("FICHENO");
 
         // Initialize components
         initializeComponents();
+
+        // Load any existing draft data
+        loadDraftData();
 
         // Check for camera permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -134,6 +138,9 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         scanStatusTextView = findViewById(R.id.scan_status);
         confirmReceiptButton = findViewById(R.id.confirm_receipt_button);
         Button manualQrButton = findViewById(R.id.manual_qr_button);
+        // Add Save as Draft button
+        saveAsDraftButton = findViewById(R.id.save_draft_button);
+        saveAsDraftButton.setOnClickListener(v -> saveDraft());
 
         // Style the table
         styleTableLayout();
@@ -160,6 +167,34 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             }
         });
     }
+    private void saveDraft() {
+        DraftData draftData = new DraftData(
+                currentReceiptNo,
+                itemManager.getScannedSerials(),
+                itemManager.getScannedItemCounts(),
+                itemManager.getItemQuantities(),
+                itemManager.getItemNames()
+        );
+
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        Gson gson = new Gson();
+        String json = gson.toJson(draftData);
+        editor.putString(KEY_DRAFT_DATA + "_" + currentReceiptNo, json);
+        editor.apply();
+
+        Toast.makeText(this, "Taslak kaydedildi", Toast.LENGTH_SHORT).show();
+        //finish();
+    }
+
+    private void loadDraftData() {
+        String json = sharedPreferences.getString(KEY_DRAFT_DATA + "_" + currentReceiptNo, null);
+        if (json != null) {
+            Gson gson = new Gson();
+            DraftData draftData = gson.fromJson(json, DraftData.class);
+            itemManager.loadDraftData(draftData);
+            updateScanStatus();
+        }
+    }
     private void showConfirmationDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Onay")
@@ -169,6 +204,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                 .setCancelable(false)
                 .show();
     }
+
     private void styleTableLayout() {
         // Set table background and border
         tableLayout.setBackgroundResource(android.R.color.white);
@@ -212,26 +248,34 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(20, 20, 20, 20);
 
-        final EditText kareKodInput = new EditText(this);
-        kareKodInput.setHint("Stok Kodu");
-        layout.addView(kareKodInput);
+        // Create KAREKODNO input
+        final EditText karekodInput = new EditText(this);
+        karekodInput.setHint("Stok Kodu");
+        layout.addView(karekodInput);
 
+        // Add some spacing
+        View spacing = new View(this);
+        spacing.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                30)); // 30dp spacing
+        layout.addView(spacing);
+
+        // Create Barcode input
         final EditText barcodeInput = new EditText(this);
-        barcodeInput.setHint("Lot No");
+        barcodeInput.setHint("Seri Kodu");
         layout.addView(barcodeInput);
 
         builder.setView(layout);
 
-        builder.setPositiveButton("Onayla", null); // Set to null initially
+        builder.setPositiveButton("Onayla", null);
         builder.setNegativeButton("İptal", (dialog, which) -> dialog.dismiss());
 
         AlertDialog dialog = builder.create();
 
-        // Override the click listener to prevent automatic dismissal on validation failure
         dialog.setOnShowListener(dialogInterface -> {
             Button button = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
             button.setOnClickListener(view -> {
-                String karekod = kareKodInput.getText().toString().trim();
+                String karekod = karekodInput.getText().toString().trim();
                 String barcode = barcodeInput.getText().toString().trim();
 
                 if (karekod.isEmpty() || barcode.isEmpty()) {
@@ -239,8 +283,8 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                     return;
                 }
 
-                String formattedQR = String.format("||KAREKODNO_%s|TEDASKIRILIM_561007|MARKA_ENT|MALZEME_BETON|TIPI_9.30/3|IMALYILI_2022||%s",
-                        karekod, barcode);
+                // Create the formatted QR string with both values
+                String formattedQR = String.format("KAREKODNO_%s||%s", karekod, barcode);
 
                 dialog.dismiss();
                 processQRCode(formattedQR);
@@ -327,7 +371,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                     switch (result) {
                         case SUCCESS:
                             String itemCode = itemManager.extractItemCodeFromQR(qrCodeData);
-                            showItemConfirmationDialog(qrCodeData);
+                            showToast("Ürün Okutuldu");
                             break;
                         case ALREADY_SCANNED:
                             showAlert("Uyarı", "Bu ürün zaten tarandı.");
@@ -422,7 +466,12 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     private void loadReceiptItems() {
         executorService.submit(() -> {
             itemManager.loadReceiptItems();
-            runOnUiThread(this::updateScanStatus);
+
+            // Load draft data after receipt items are loaded
+            runOnUiThread(() -> {
+                loadDraftData();
+                updateScanStatus();
+            });
         });
     }
 
@@ -586,10 +635,27 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         }
     }
 }
+
 class ReceiptItemManager {
     private static final String TAG = "ReceiptItemManager";
     private final String receiptNo;
     private final DatabaseHelper databaseHelper;
+
+    public Set<String> getScannedSerials() {
+        return new HashSet<>(scannedSerials);
+    }
+
+    public Map<String, Integer> getScannedItemCounts() {
+        return new HashMap<>(scannedItemCounts);
+    }
+
+    public Map<String, Integer> getItemQuantities() {
+        return new HashMap<>(itemQuantities);
+    }
+
+    public Map<String, String> getItemNames() {
+        return new HashMap<>(itemNames);
+    }
 
     // Updated data structures
     private Map<String, Integer> itemQuantities = new HashMap<>(); // itemCode -> total quantity
@@ -613,7 +679,13 @@ class ReceiptItemManager {
             this.orgnr = orgnr;
         }
     }
-
+    // Add this method to load draft data
+    public void loadDraftData(DraftData draftData) {
+        this.scannedSerials = new HashSet<>(draftData.scannedSerials);
+        this.scannedItemCounts = new HashMap<>(draftData.scannedItemCounts);
+        this.itemQuantities = new HashMap<>(draftData.itemQuantities);
+        this.itemNames = new HashMap<>(draftData.itemNames);
+    }
     public ReceiptItemManager(String receiptNo, DatabaseHelper databaseHelper) {
         this.receiptNo = receiptNo;
         this.databaseHelper = databaseHelper;
