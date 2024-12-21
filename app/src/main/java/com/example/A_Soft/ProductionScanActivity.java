@@ -626,15 +626,17 @@ public class ProductionScanActivity extends AppCompatActivity {
                         try {
                             String qrCode = item.kareKodNo;
 
-                            // First try to get KAREKODNO directly
-                            String kareKodNo = extractPattern(qrCode, KAREKODNO_PATTERN);
+                            // Get full KAREKODNO first
+                            String fullKareKodNo = extractPattern(qrCode, KAREKODNO_PATTERN);
+                            if (fullKareKodNo.isEmpty()) {
+                                fullKareKodNo = extractPattern(qrCode, TEDASKIRILIM_PATTERN);
+                            }
 
-                            // If KAREKODNO is empty, try to get it from TEDASKIRILIM
-                            if (kareKodNo.isEmpty()) {
-                                String tedasKirilimValue = extractPattern(qrCode, TEDASKIRILIM_PATTERN);
-                                if (tedasKirilimValue.contains("ENT")) {
-                                    kareKodNo = tedasKirilimValue; // Use the full value including ENT
-                                }
+                            // Extract only the number part after ENT for ITEMS table
+                            String kareKodNoForItems = "";
+                            if (fullKareKodNo.contains("ENT")) {
+                                String[] parts = fullKareKodNo.split("ENT");
+                                kareKodNoForItems = parts.length > 1 ? parts[1].trim() : "";
                             }
 
                             // Extract TEDAS part (before ENT) for TEDASKIRILIM field
@@ -644,8 +646,9 @@ public class ProductionScanActivity extends AppCompatActivity {
                                 actualTedasKirilim = tedasKirilimValue.split("ENT")[0];
                             }
 
-                            itemsStmt.setString(1, kareKodNo);  // Full KAREKODNO including ENT part
-                            itemsStmt.setString(2, actualTedasKirilim);  // Only the TEDAS part
+                            // For AST_PRODUCTION_ITEMS, use only the number after ENT
+                            itemsStmt.setString(1, kareKodNoForItems);  // Only the number after ENT
+                            itemsStmt.setString(2, actualTedasKirilim); // Only the TEDAS part
                             itemsStmt.setString(3, extractPattern(qrCode, MARKA_PATTERN));
                             itemsStmt.setString(4, extractPattern(qrCode, MALZEME_PATTERN));
                             itemsStmt.setString(5, extractPattern(qrCode, TIPI_PATTERN));
@@ -658,6 +661,10 @@ public class ProductionScanActivity extends AppCompatActivity {
                             itemsStmt.setTimestamp(8, sqlTimestamp);
 
                             itemsStmt.addBatch();
+
+                            // Debug log
+                            Log.d(TAG, "ITEMS Table - KAREKODNO: " + kareKodNoForItems +
+                                    ", TEDASKIRILIM: " + actualTedasKirilim);
                         } catch (Exception e) {
                             conn.rollback();
                             String debugInfo = getDebugInfo(item, e, itemsStmt);
@@ -677,24 +684,19 @@ public class ProductionScanActivity extends AppCompatActivity {
                     }
                 }
 
-                // Insert into AST_PRODUCTION_SCANNED
+                // Insert into AST_PRODUCTION_SCANNED (keep using full KAREKODNO)
                 try (PreparedStatement scannedStmt = conn.prepareStatement(insertScannedQuery)) {
                     for (ScannedItem item : scannedItems) {
                         try {
                             String qrCode = item.kareKodNo;
 
-                            // First try to get KAREKODNO directly
-                            String kareKodNo = extractPattern(qrCode, KAREKODNO_PATTERN);
-
-                            // If empty, try to extract from TEDASKIRILIM
-                            if (kareKodNo.isEmpty()) {
-                                String tedasKirilimValue = extractPattern(qrCode, TEDASKIRILIM_PATTERN);
-                                if (tedasKirilimValue.contains("ENT")) {
-                                    kareKodNo = tedasKirilimValue; // Use full value including ENT part
-                                }
+                            // For SCANNED table, use the full KAREKODNO including ENT part
+                            String fullKareKodNo = extractPattern(qrCode, KAREKODNO_PATTERN);
+                            if (fullKareKodNo.isEmpty()) {
+                                fullKareKodNo = extractPattern(qrCode, TEDASKIRILIM_PATTERN);
                             }
 
-                            scannedStmt.setString(1, kareKodNo);  // Full KAREKODNO including ENT part
+                            scannedStmt.setString(1, fullKareKodNo);  // Full KAREKODNO including ENT part
                             scannedStmt.setString(2, item.materialName);
 
                             SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
@@ -703,6 +705,9 @@ public class ProductionScanActivity extends AppCompatActivity {
                             scannedStmt.setTimestamp(3, sqlTimestamp);
 
                             scannedStmt.addBatch();
+
+                            // Debug log
+                            Log.d(TAG, "SCANNED Table - KAREKODNO: " + fullKareKodNo);
                         } catch (Exception e) {
                             conn.rollback();
                             String debugInfo = getDebugInfo(item, e, scannedStmt);
