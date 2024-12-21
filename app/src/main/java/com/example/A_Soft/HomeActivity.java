@@ -3,7 +3,7 @@ package com.example.A_Soft;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.Button;
+import android.widget.ImageButton; // Change Button to ImageButton
 import androidx.appcompat.app.AppCompatActivity;
 
 public class HomeActivity extends AppCompatActivity {
@@ -13,9 +13,9 @@ public class HomeActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.home_activity);
 
-        // Initialize buttons
-        Button buttonUretim = findViewById(R.id.button_uretim);
-        Button buttonSevkiyat = findViewById(R.id.button_sevkiyat);
+        // Initialize buttons as ImageButton
+        ImageButton buttonUretim = findViewById(R.id.button_uretim);
+        ImageButton buttonSevkiyat = findViewById(R.id.button_sevkiyat);
 
         // Set click listener for uretim button
         buttonUretim.setOnClickListener(new View.OnClickListener() {

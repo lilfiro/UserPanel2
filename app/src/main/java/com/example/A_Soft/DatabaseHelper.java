@@ -109,32 +109,6 @@ public class DatabaseHelper {
         return String.format("%s.dbo.%s", anatoliaSoftDatabaseName, baseTableName);
     }
 
-
-    // Generic method to execute a query on Tiger Database
-    public ResultSet executeTigerQuery(String query, String... params) throws SQLException {
-        try (Connection connection = getTigerConnection();
-             PreparedStatement statement = connection.prepareStatement(query)) {
-
-            for (int i = 0; i < params.length; i++) {
-                statement.setString(i + 1, params[i]);
-            }
-
-            return statement.executeQuery();
-        }
-    }
-
-    // Generic method to execute a query on Anatoliasoft Database
-    public ResultSet executeAnatoliaSoftQuery(String query, String... params) throws SQLException {
-        try (Connection connection = getAnatoliaSoftConnection();
-             PreparedStatement statement = connection.prepareStatement(query)) {
-
-            for (int i = 0; i < params.length; i++) {
-                statement.setString(i + 1, params[i]);
-            }
-
-            return statement.executeQuery();
-        }
-    }
     public int executeAnatoliaSoftUpdate(String query, String... params) throws SQLException {
         try (Connection connection = getAnatoliaSoftConnection();
              PreparedStatement statement = connection.prepareStatement(query)) {
@@ -147,7 +121,6 @@ public class DatabaseHelper {
         }
     }
     // User check method with dynamic connection (kept from previous implementation)
-// User check method with dynamic connection (kept from previous implementation)
     public void checkUser(String username, String password, OnUserCheckListener listener) {
         new Thread(() -> {
             boolean userExists = performCheckUser(username, password);
@@ -180,7 +153,6 @@ public class DatabaseHelper {
             return false;
         }
     }
-
 
     // Getters for configuration values
     public String getServerAddress() { return serverAddress; }
