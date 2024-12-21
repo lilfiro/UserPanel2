@@ -223,26 +223,33 @@ public class ProductionScanActivity extends AppCompatActivity {
             return;
         }
 
-        try {
-            QRCodeData parsedData = parseQRCode(qrCodeData);
-            if (parsedData == null) {
-                showToast("QR kod formatı geçersiz");
-                return;
+        executorService.submit(() -> {
+            try {
+                QRCodeData parsedData = parseQRCode(qrCodeData);
+                if (parsedData == null) {
+                    runOnUiThread(() -> showToast("QR kod formatı geçersiz"));
+                    return;
+                }
+
+                if (!validateTedasCode(parsedData.tedasKirilim, parsedData.barcode)) {
+                    runOnUiThread(() -> showToast("TEDAŞ kodu ve barkod eşleşmesi bulunamadı"));
+                    return;
+                }
+
+                String itemInfo = getItemInfoFromDatabase(parsedData.tedasKirilim, parsedData.barcode);
+                if (itemInfo == null) {
+                    runOnUiThread(() -> showToast("Ürün veya TEDAŞ eşleşmesi bulunamadı"));
+                    return;
+                }
+
+                lastScanTime = currentTime;
+                processScannedItem(parsedData, itemInfo, "KAMERA");
+
+            } catch (Exception e) {
+                Log.e(TAG, "QR Code processing error", e);
+                runOnUiThread(() -> showToast("Karekod okunurken hata oluştu"));
             }
-
-            String itemInfo = getItemInfoFromDatabase(parsedData.tedasKirilim, parsedData.barcode);
-            if (itemInfo == null) {
-                showToast("Ürün veya TEDAŞ eşleşmesi bulunamadı");
-                return;
-            }
-
-            lastScanTime = currentTime;
-            processScannedItem(parsedData, itemInfo, "KAMERA");
-
-        } catch (Exception e) {
-            Log.e(TAG, "QR Code processing error", e);
-            showToast("Karekod okunurken hata oluştu");
-        }
+        });
     }
 
     private void processScannedItem(QRCodeData parsedData, String itemInfo, String entryMethod) {
@@ -498,40 +505,66 @@ public class ProductionScanActivity extends AppCompatActivity {
             return;
         }
 
-        processManualInput(fullKareKodNo, barcode, imalYili, dialog);
+        // Single validation here
+        executorService.submit(() -> {
+            try {
+                if (!validateTedasCode(fullKareKodNo, barcode)) {
+                    runOnUiThread(() -> showToast("TEDAŞ kodu ve barkod eşleşmesi bulunamadı"));
+                    return;
+                }
+
+                runOnUiThread(() -> processManualInput(fullKareKodNo, barcode, imalYili, dialog));
+            } catch (Exception e) {
+                Log.e(TAG, "Error in manual input validation", e);
+                runOnUiThread(() -> showToast("Doğrulama sırasında hata oluştu"));
+            }
+        });
     }
+
 
     private void processManualInput(String fullKareKodNo, String barcode, String imalYili, AlertDialog dialog) {
         executorService.submit(() -> {
             try {
+                Log.d(TAG, "Processing manual input: " + fullKareKodNo);
                 String itemInfo = getItemInfoFromDatabase(fullKareKodNo, barcode);
                 if (itemInfo == null) {
-                    showToast("Ürün veya TEDAŞ eşleşmesi bulunamadı");
+                    runOnUiThread(() -> showToast("Ürün veya TEDAŞ eşleşmesi bulunamadı"));
                     return;
                 }
 
                 String[] itemParts = itemInfo.split("\\|");
                 if (itemParts.length != 3) {
-                    showToast("Veritabanı hatası");
+                    runOnUiThread(() -> showToast("Veritabanı hatası"));
                     return;
                 }
 
                 String malzeme = itemParts[0];
                 String tipi = itemParts[1];
-                String tedasPart = fullKareKodNo.split("ENT")[0];
+                String tedasPart = fullKareKodNo.split("ENT")[0];  // Extract TEDAS part
 
                 String formattedQR = formatManualQRCode(fullKareKodNo, tedasPart, malzeme, tipi, imalYili, barcode);
-                runOnUiThread(dialog::dismiss);
-                processQRCode(formattedQR);
+
+                runOnUiThread(() -> {
+                    dialog.dismiss();
+                    processScannedItem(new QRCodeData(formattedQR, fullKareKodNo, tedasPart, barcode),
+                            itemInfo, "MANUAL");
+                });
 
             } catch (Exception e) {
                 Log.e(TAG, "Error processing manual entry", e);
-                showToast("İşlem sırasında hata oluştu: " + e.getMessage());
+                runOnUiThread(() -> showToast("İşlem sırasında hata oluştu: " + e.getMessage()));
             }
         });
     }
 
     private String getItemInfoFromDatabase(String tedasKirilim, String barcode) {
+        String tedasCode = tedasKirilim;
+        if (tedasKirilim.contains("ENT")) {
+            tedasCode = tedasKirilim.split("ENT")[0];
+        }
+
+        Log.d(TAG, "GetItemInfo: TEDAS code = '" + tedasCode + "', barcode = '" + barcode + "'");
+
         try (Connection conn = databaseHelper.getAnatoliaSoftConnection();
              PreparedStatement stmt = conn.prepareStatement(
                      "SELECT i.DESCRIPTION, i.GROUPCODE, t.ITM_TEDAS " +
@@ -539,27 +572,82 @@ public class ProductionScanActivity extends AppCompatActivity {
                              "JOIN AST_TEMS_TEDAS t ON i.CODE = t.CODE " +
                              "WHERE i.CODE = ? AND t.ITM_TEDAS = ?")) {
 
-            stmt.setString(1, barcode);
-            stmt.setString(2, tedasKirilim);
+            stmt.setString(1, barcode.trim());
+            stmt.setString(2, tedasCode.trim());
+
+            Log.d(TAG, "GetItemInfo Query: " + stmt.toString());
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     String dbMalzeme = rs.getString("GROUPCODE");
                     String dbTipi = rs.getString("DESCRIPTION");
                     String dbTedasKirilim = rs.getString("ITM_TEDAS");
+
+                    Log.d(TAG, String.format("GetItemInfo Results: malzeme='%s', tipi='%s', tedas='%s'",
+                            dbMalzeme, dbTipi, dbTedasKirilim));
+
                     return String.format("%s|%s|%s", dbMalzeme, dbTipi, dbTedasKirilim);
+                } else {
+                    Log.d(TAG, "GetItemInfo: No results found");
                 }
             }
         } catch (SQLException e) {
             Log.e(TAG, "Database error while checking item", e);
+            Log.e(TAG, "SQL Error: " + e.getMessage());
         }
         return null;
+    }
+    private boolean validateTedasCode(String fullKareKodNo, String barcode) {
+        if (!fullKareKodNo.contains("ENT")) {
+            Log.d(TAG, "TEDAS Validation: No ENT found in " + fullKareKodNo);
+            return false;
+        }
+
+        String tedasCode = fullKareKodNo.split("ENT")[0];
+        Log.d(TAG, "TEDAS Validation: Extracted TEDAS code = '" + tedasCode + "'");
+        Log.d(TAG, "TEDAS Validation: Checking barcode = '" + barcode + "'");
+
+        try (Connection conn = databaseHelper.getAnatoliaSoftConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "SELECT COUNT(*), MAX(ITM_TEDAS) as ITM_TEDAS, MAX(CODE) as CODE FROM AST_TEMS_TEDAS WHERE CODE = ? AND ITM_TEDAS = ?")) {
+
+            stmt.setString(1, barcode.trim());
+            stmt.setString(2, tedasCode.trim());
+
+            // Log the actual query
+            Log.d(TAG, "TEDAS Validation Query: " + stmt.toString());
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                rs.next();
+                int count = rs.getInt(1);
+                String dbTedas = rs.getString("ITM_TEDAS");
+                String dbCode = rs.getString("CODE");
+
+                Log.d(TAG, String.format("TEDAS Validation Results: count=%d, db_tedas='%s', db_code='%s'",
+                        count, dbTedas, dbCode));
+
+                return count > 0;
+            }
+        } catch (SQLException e) {
+            Log.e(TAG, "Error validating TEDAS code", e);
+            Log.e(TAG, "SQL Error: " + e.getMessage());
+            return false;
+        }
     }
 
     private String formatManualQRCode(String fullKareKodNo, String tedasPart, String malzeme,
                                       String tipi, String imalYili, String barcode) {
+        // Extract TEDAS code (part before ENT) for TEDASKIRILIM
+        String tedasCode = fullKareKodNo.split("ENT")[0];
+
         return String.format("KAREKODNO_%s|TEDASKIRILIM_%s|MARKA_%s|MALZEME_%s|TIPI_%s|IMALYILI_%s||%s",
-                fullKareKodNo, tedasPart, "ENT", malzeme, tipi, imalYili, barcode);
+                fullKareKodNo,     // Keep full number for KAREKODNO
+                tedasCode,         // Use only TEDAS part for TEDASKIRILIM
+                "ENT",
+                malzeme,
+                tipi,
+                imalYili,
+                barcode);
     }
 
     private void showScannedItemsList() {
