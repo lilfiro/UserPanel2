@@ -52,12 +52,12 @@ import com.google.gson.Gson;
 
 public class ProductionScanActivity extends AppCompatActivity {
     private static final String TAG = "ProductionScanActivity";
-    private static final Pattern KAREKODNO_PATTERN = Pattern.compile("\\|\\|KAREKODNO_([^|]+)\\|");
-    private static final Pattern TEDASKIRILIM_PATTERN = Pattern.compile("TEDASKIRILIM_([^|]+)\\|");
-    private static final Pattern MARKA_PATTERN = Pattern.compile("MARKA_([^|]+)\\|");
-    private static final Pattern MALZEME_PATTERN = Pattern.compile("MALZEME_([^|]+)\\|");
-    private static final Pattern TIPI_PATTERN = Pattern.compile("TIPI_([^|]+)\\|");
-    private static final Pattern IMALYILI_PATTERN = Pattern.compile("IMALYILI_(\\d+)\\|");
+    private static final Pattern KAREKODNO_PATTERN = Pattern.compile("KAREKODNO_([^|]+)");
+    private static final Pattern TEDASKIRILIM_PATTERN = Pattern.compile("TEDASKIRILIM_([^|]+)");
+    private static final Pattern MARKA_PATTERN = Pattern.compile("MARKA_([^|]+)");
+    private static final Pattern MALZEME_PATTERN = Pattern.compile("MALZEME_([^|]+)");
+    private static final Pattern TIPI_PATTERN = Pattern.compile("TIPI_([^|]+)");
+    private static final Pattern IMALYILI_PATTERN = Pattern.compile("IMALYILI_(\\d+)");
     private static final long SCAN_DEBOUNCE_INTERVAL = 2000; // 2 seconds
     private static final String PREF_NAME = "ProductionDrafts";
     private static final String KEY_DRAFT_DATA = "draft_data";
@@ -403,10 +403,14 @@ public class ProductionScanActivity extends AppCompatActivity {
                         String malzeme = itemParts[0];
                         String tipi = itemParts[1];
 
-                        // Format the QR code string with the full KAREKODNO
-                        String formattedQR = String.format("KAREKODNO_%s|TEDASKIRILIM_%s|MARKA_%s|MALZEME_%s|TIPI_%s|IMALYILI_%s||%s",
-                                fullKareKodNo,  // Use the full value for KAREKODNO
-                                fullKareKodNo.split("ENT")[0],  // Use only the TEDAS part
+                        // Get TEDAS part (before ENT)
+                        String tedasPart = fullKareKodNo.split("ENT")[0];
+
+                        // Format the QR code string with KAREKODNO at the beginning
+                        String formattedQR = String.format(
+                                "KAREKODNO_%s|TEDASKIRILIM_%s|MARKA_%s|MALZEME_%s|TIPI_%s|IMALYILI_%s||%s",
+                                fullKareKodNo,  // Use the complete serial number as KAREKODNO
+                                tedasPart,      // Use only the part before ENT for TEDASKIRILIM
                                 "ENT",
                                 malzeme,
                                 tipi,
@@ -414,6 +418,11 @@ public class ProductionScanActivity extends AppCompatActivity {
                                 barcode);
 
                         runOnUiThread(() -> dialog.dismiss());
+
+                        // Debug log to verify the formatted QR string
+                        Log.d(TAG, "Formatted QR: " + formattedQR);
+
+                        // Process the QR code
                         processQRCode(formattedQR);
 
                     } catch (Exception e) {
@@ -426,7 +435,19 @@ public class ProductionScanActivity extends AppCompatActivity {
 
         dialog.show();
     }
-
+    private void debugQRCode(String qrCode) {
+        Log.d(TAG, "QR Code Debug:");
+        Log.d(TAG, "Full QR: " + qrCode);
+        String karekodno = extractPattern(qrCode, KAREKODNO_PATTERN);
+        Log.d(TAG, "KAREKODNO_PATTERN: " + KAREKODNO_PATTERN.pattern());
+        Log.d(TAG, "KAREKODNO: " + karekodno);
+        Log.d(TAG, "TEDASKIRILIM: " + extractPattern(qrCode, TEDASKIRILIM_PATTERN));
+        Log.d(TAG, "MARKA: " + extractPattern(qrCode, MARKA_PATTERN));
+        Log.d(TAG, "MALZEME: " + extractPattern(qrCode, MALZEME_PATTERN));
+        Log.d(TAG, "TIPI: " + extractPattern(qrCode, TIPI_PATTERN));
+        Log.d(TAG, "IMALYILI: " + extractPattern(qrCode, IMALYILI_PATTERN));
+        Log.d(TAG, "BARCODE: " + extractBarcode(qrCode));
+    }
     private String getItemInfoFromDatabase(String tedasKirilim, String barcode) throws SQLException {
         try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
             // First check AST_TEMS_TEDAS for matching ITM_TEDAS
@@ -466,19 +487,19 @@ public class ProductionScanActivity extends AppCompatActivity {
         }
         return null;
     }
-    private EditText createEditText(String hint) {
-        EditText editText = new EditText(this);
-        editText.setHint(hint);
-        return editText;
-    }
 
-    private View createSpacingView() {
-        View spacing = new View(this);
-        spacing.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 30));
-        return spacing;
+    private String[] splitTedasKirilim(String input) {
+        String[] result = new String[2];
+        if (input != null && input.contains("ENT")) {
+            String[] parts = input.split("ENT");
+            result[0] = parts[0]; // TEDASKIRILIM
+            result[1] = parts.length > 1 ? parts[1] : ""; // KAREKODNO
+        } else {
+            result[0] = input;
+            result[1] = "";
+        }
+        return result;
     }
-
     private void processQRCode(String qrCodeData) {
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastScanTime < SCAN_DEBOUNCE_INTERVAL) {
@@ -486,43 +507,38 @@ public class ProductionScanActivity extends AppCompatActivity {
         }
 
         try {
-            String kareKodNo;
-            String tedasKirilim;
-            String marka;
-            String malzeme;
-            String tipi;
-            String imalYili;
+            debugQRCode(qrCodeData);
+            String kareKodNo = "";
+            String tedasKirilim = "";
+            String marka = "";
+            String malzeme = "";
+            String tipi = "";
+            String imalYili = "";
             String barcode;
 
             if (qrCodeData.contains("|")) {
-                // Extract data from QR code
-                String[] parts = qrCodeData.split("\\|");
-                tedasKirilim = parts.length > 1 ? extractValue(parts[1], "TEDASKIRILIM_") : "";
+                // First try to get KAREKODNO directly
+                kareKodNo = extractPattern(qrCodeData, KAREKODNO_PATTERN);
 
-                // Extract KAREKODNO from TEDASKIRILIM if present
-                String[] tedas_parts = splitTedasKirilim(tedasKirilim);
-                tedasKirilim = tedas_parts[0];
-                kareKodNo = tedas_parts[1];
-
-                // If no KAREKODNO in TEDASKIRILIM, try KAREKODNO field
+                // If KAREKODNO is empty, try to get it from TEDASKIRILIM
                 if (kareKodNo.isEmpty()) {
-                    kareKodNo = parts.length > 0 ? extractValue(parts[0], "KAREKODNO_") : "";
+                    tedasKirilim = extractPattern(qrCodeData, TEDASKIRILIM_PATTERN);
+                    if (tedasKirilim.contains("ENT")) {
+                        kareKodNo = tedasKirilim; // Use the full TEDASKIRILIM value as KAREKODNO
+                    }
                 }
 
-                marka = parts.length > 2 ? extractValue(parts[2], "MARKA_") : "ENT";
-                malzeme = parts.length > 3 ? extractValue(parts[3], "MALZEME_") : "";
-                tipi = parts.length > 4 ? extractValue(parts[4], "TIPI_") : "";
-                imalYili = parts.length > 5 ? extractValue(parts[5], "IMALYILI_") : "";
-                barcode = extractBarcode(qrCodeData);
-            } else {
-                // Regular QR code scan
-                kareKodNo = extractPattern(qrCodeData, KAREKODNO_PATTERN);
-                tedasKirilim = extractPattern(qrCodeData, TEDASKIRILIM_PATTERN);
+                // Extract other fields
+                if (tedasKirilim.isEmpty()) {
+                    tedasKirilim = extractPattern(qrCodeData, TEDASKIRILIM_PATTERN);
+                }
                 marka = extractPattern(qrCodeData, MARKA_PATTERN);
                 malzeme = extractPattern(qrCodeData, MALZEME_PATTERN);
                 tipi = extractPattern(qrCodeData, TIPI_PATTERN);
                 imalYili = extractPattern(qrCodeData, IMALYILI_PATTERN);
                 barcode = extractBarcode(qrCodeData);
+            } else {
+                barcode = "";
             }
 
             // Check database for item info
@@ -570,7 +586,7 @@ public class ProductionScanActivity extends AppCompatActivity {
                     materialCounts.merge(finalMaterialName, 1, Integer::sum);
 
                     ScannedItem newItem = new ScannedItem(
-                            qrCodeData,
+                            qrCodeData, // Store the full QR code data
                             finalMaterialName,
                             new SimpleDateFormat("dd.MM.yyyy HH:mm:ss").format(new Date())
                     );
@@ -592,63 +608,177 @@ public class ProductionScanActivity extends AppCompatActivity {
             showToast("Karekod okunurken hata oluştu");
         }
     }
-    // New helper method to process scanned item
-    private void processScannedItem(String kareKodNo, String tedasKirilim, String marka,
-                                    String malzeme, String tipi, String imalYili,
-                                    String barcode, String materialName) {
-        // Check if already scanned in AST_PRODUCTION_SCANNED
-        try {
-            if (isAlreadyScanned(kareKodNo)) {
-                showToast("Bu ürün zaten tarandı");
-                return;
+
+    private void saveToProductionScanned() throws SQLException {
+        try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
+            String insertItemsQuery = "INSERT INTO AST_PRODUCTION_ITEMS " +
+                    "(KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, CREATE_DATE) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+            String insertScannedQuery = "INSERT INTO AST_PRODUCTION_SCANNED " +
+                    "(KAREKODNO, MATERIAL_NAME, SCAN_DATE) " +
+                    "VALUES (?, ?, ?)";
+
+            conn.setAutoCommit(false);
+            try {
+                // Insert into AST_PRODUCTION_ITEMS
+                try (PreparedStatement itemsStmt = conn.prepareStatement(insertItemsQuery)) {
+                    for (ScannedItem item : scannedItems) {
+                        try {
+                            String qrCode = item.kareKodNo;
+
+                            // First try to get KAREKODNO directly
+                            String kareKodNo = extractPattern(qrCode, KAREKODNO_PATTERN);
+
+                            // If KAREKODNO is empty, try to get it from TEDASKIRILIM
+                            if (kareKodNo.isEmpty()) {
+                                String tedasKirilimValue = extractPattern(qrCode, TEDASKIRILIM_PATTERN);
+                                if (tedasKirilimValue.contains("ENT")) {
+                                    kareKodNo = tedasKirilimValue; // Use the full value including ENT
+                                }
+                            }
+
+                            // Extract TEDAS part (before ENT) for TEDASKIRILIM field
+                            String tedasKirilimValue = extractPattern(qrCode, TEDASKIRILIM_PATTERN);
+                            String actualTedasKirilim = tedasKirilimValue;
+                            if (tedasKirilimValue.contains("ENT")) {
+                                actualTedasKirilim = tedasKirilimValue.split("ENT")[0];
+                            }
+
+                            itemsStmt.setString(1, kareKodNo);  // Full KAREKODNO including ENT part
+                            itemsStmt.setString(2, actualTedasKirilim);  // Only the TEDAS part
+                            itemsStmt.setString(3, extractPattern(qrCode, MARKA_PATTERN));
+                            itemsStmt.setString(4, extractPattern(qrCode, MALZEME_PATTERN));
+                            itemsStmt.setString(5, extractPattern(qrCode, TIPI_PATTERN));
+                            itemsStmt.setString(6, extractPattern(qrCode, IMALYILI_PATTERN));
+                            itemsStmt.setString(7, extractBarcode(qrCode));
+
+                            SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
+                            java.util.Date parsedDate = dateFormat.parse(item.timestamp);
+                            java.sql.Timestamp sqlTimestamp = new java.sql.Timestamp(parsedDate.getTime());
+                            itemsStmt.setTimestamp(8, sqlTimestamp);
+
+                            itemsStmt.addBatch();
+                        } catch (Exception e) {
+                            conn.rollback();
+                            String debugInfo = getDebugInfo(item, e, itemsStmt);
+                            showDebugDialog("Veri Kaydetme Hatası", debugInfo);
+                            throw new SQLException("AST_PRODUCTION_ITEMS tablosuna veri eklenirken hata oluştu", e);
+                        }
+                    }
+
+                    int[] itemResults = itemsStmt.executeBatch();
+                    for (int i = 0; i < itemResults.length; i++) {
+                        if (itemResults[i] <= 0) {
+                            String debugInfo = getDebugInfo(scannedItems.get(i),
+                                    new Exception("Batch insert failed for item " + (i + 1)), itemsStmt);
+                            showDebugDialog("Batch İşlem Hatası", debugInfo);
+                            throw new SQLException("Batch insert failed for item " + (i + 1));
+                        }
+                    }
+                }
+
+                // Insert into AST_PRODUCTION_SCANNED
+                try (PreparedStatement scannedStmt = conn.prepareStatement(insertScannedQuery)) {
+                    for (ScannedItem item : scannedItems) {
+                        try {
+                            String qrCode = item.kareKodNo;
+
+                            // First try to get KAREKODNO directly
+                            String kareKodNo = extractPattern(qrCode, KAREKODNO_PATTERN);
+
+                            // If empty, try to extract from TEDASKIRILIM
+                            if (kareKodNo.isEmpty()) {
+                                String tedasKirilimValue = extractPattern(qrCode, TEDASKIRILIM_PATTERN);
+                                if (tedasKirilimValue.contains("ENT")) {
+                                    kareKodNo = tedasKirilimValue; // Use full value including ENT part
+                                }
+                            }
+
+                            scannedStmt.setString(1, kareKodNo);  // Full KAREKODNO including ENT part
+                            scannedStmt.setString(2, item.materialName);
+
+                            SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
+                            java.util.Date parsedDate = dateFormat.parse(item.timestamp);
+                            java.sql.Timestamp sqlTimestamp = new java.sql.Timestamp(parsedDate.getTime());
+                            scannedStmt.setTimestamp(3, sqlTimestamp);
+
+                            scannedStmt.addBatch();
+                        } catch (Exception e) {
+                            conn.rollback();
+                            String debugInfo = getDebugInfo(item, e, scannedStmt);
+                            showDebugDialog("Veri Kaydetme Hatası", debugInfo);
+                            throw new SQLException("AST_PRODUCTION_SCANNED tablosuna veri eklenirken hata oluştu", e);
+                        }
+                    }
+
+                    int[] scannedResults = scannedStmt.executeBatch();
+                    for (int i = 0; i < scannedResults.length; i++) {
+                        if (scannedResults[i] <= 0) {
+                            String debugInfo = getDebugInfo(scannedItems.get(i),
+                                    new Exception("Batch insert failed for scanned item " + (i + 1)), scannedStmt);
+                            showDebugDialog("Batch İşlem Hatası", debugInfo);
+                            throw new SQLException("Batch insert failed for scanned item " + (i + 1));
+                        }
+                    }
+                }
+
+                Log.d("SQL_DEBUG", "All operations successful, committing transaction");
+                conn.commit();
+            } catch (SQLException e) {
+                Log.e("SQL_DEBUG", "Error during database operations: " + e.getMessage(), e);
+                conn.rollback();
+                String debugInfo = getDebugInfo(scannedItems.get(0), e, null);
+                showDebugDialog("Veritabanı Hatası", debugInfo);
+                throw new SQLException("Veriler kaydedilirken hata oluştu", e);
+            } finally {
+                conn.setAutoCommit(true);
             }
-
-            // Check if already scanned in current session
-            if (scannedKareKodNos.contains(kareKodNo)) {
-                showToast("Bu ürün zaten tarandı");
-                return;
-            }
-
-            // Add to scanned items
-            scannedKareKodNos.add(kareKodNo);
-            materialCounts.merge(materialName, 1, Integer::sum);
-
-            // Create QR code string for storage
-            String fullQRCode = String.format("KAREKODNO_%s|TEDASKIRILIM_%s|MARKA_%s|MALZEME_%s|TIPI_%s|IMALYILI_%s||%s",
-                    kareKodNo, tedasKirilim, marka, malzeme, tipi, imalYili, barcode);
-
-            ScannedItem newItem = new ScannedItem(
-                    fullQRCode,
-                    materialName,
-                    new SimpleDateFormat("dd.MM.yyyy HH:mm:ss").format(new Date())
-            );
-            scannedItems.add(newItem);
-
-            runOnUiThread(() -> {
-                updateTable();
-                updateScanStatus();
-                showToast("Ürün Okutuldu - Barkod: " + barcode);
-            });
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error processing scanned item", e);
-            showToast("İşlem sırasında hata oluştu");
         }
     }
-    private String[] splitTedasKirilim(String input) {
-        String[] result = new String[2];
-        if (input != null && input.contains("ENT")) {
-            String[] parts = input.split("ENT");
-            result[0] = parts[0]; // TEDASKIRILIM
-            result[1] = parts.length > 1 ? parts[1] : ""; // KAREKODNO
-        } else {
-            result[0] = input;
-            result[1] = "";
+    private String extractKareKodNoForItems(String qrCode) {
+        // For AST_PRODUCTION_ITEMS table - only get the number after ENT
+        String fullKareKodNo = extractPattern(qrCode, KAREKODNO_PATTERN);
+        if (fullKareKodNo.contains("ENT")) {
+            String[] parts = fullKareKodNo.split("ENT");
+            return parts.length > 1 ? parts[1] : "";
         }
-        return result;
+        return fullKareKodNo;
     }
 
+    private String extractPattern(String qrCode, Pattern pattern) {
+        if (qrCode == null || qrCode.isEmpty()) {
+            return "";
+        }
 
+        java.util.regex.Matcher matcher = pattern.matcher(qrCode);
+        if (matcher.find()) {
+            String extracted = matcher.group(1);
+            Log.d(TAG, "Pattern " + pattern.pattern() + " extracted: " + extracted); // Debug log
+            return extracted.trim();
+        }
+        Log.d(TAG, "Pattern " + pattern.pattern() + " not found in: " + qrCode); // Debug log for failed matches
+        return "";
+    }
+    private String extractBarcode(String qrCode) {
+        if (qrCode == null || qrCode.isEmpty()) {
+            return "";
+        }
+        String[] parts = qrCode.split("\\|\\|");
+        return parts.length > 1 ? parts[parts.length - 1].trim() : "";
+    }
+
+    private EditText createEditText(String hint) {
+        EditText editText = new EditText(this);
+        editText.setHint(hint);
+        return editText;
+    }
+
+    private View createSpacingView() {
+        View spacing = new View(this);
+        spacing.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 30));
+        return spacing;
+    }
 
     private String extractValue(String part, String prefix) {
         if (part == null || part.isEmpty() || !part.startsWith(prefix)) {
@@ -774,25 +904,6 @@ public class ProductionScanActivity extends AppCompatActivity {
         });
     }
 
-    private String getDebugInfo(ScannedItem item, Exception e) {
-        StringBuilder debug = new StringBuilder();
-        debug.append("Hata Zamanı: ").append(new SimpleDateFormat("dd.MM.yyyy HH:mm:ss").format(new Date())).append("\n\n");
-        debug.append("QR Kod: ").append(item.kareKodNo).append("\n\n");
-        debug.append("Çıkarılan Değerler:\n");
-        debug.append("KAREKODNO: ").append(extractPattern(item.kareKodNo, KAREKODNO_PATTERN)).append("\n");
-        debug.append("TEDASKIRILIM: ").append(extractPattern(item.kareKodNo, TEDASKIRILIM_PATTERN)).append("\n");
-        debug.append("MARKA: ").append(extractPattern(item.kareKodNo, MARKA_PATTERN)).append("\n");
-        debug.append("MALZEME: ").append(extractPattern(item.kareKodNo, MALZEME_PATTERN)).append("\n");
-        debug.append("TIPI: ").append(extractPattern(item.kareKodNo, TIPI_PATTERN)).append("\n");
-        debug.append("IMALYILI: ").append(extractPattern(item.kareKodNo, IMALYILI_PATTERN)).append("\n");
-        debug.append("BARKOD: ").append(extractBarcode(item.kareKodNo)).append("\n");
-        debug.append("TIMESTAMP: ").append(item.timestamp).append("\n\n");
-        debug.append("Hata Mesajı: ").append(e.getMessage()).append("\n");
-        if (e.getCause() != null) {
-            debug.append("Hata Nedeni: ").append(e.getCause().getMessage()).append("\n");
-        }
-        return debug.toString();
-    }
 
     private String buildQueryWithValues(PreparedStatement stmt) {
         try {
@@ -831,143 +942,7 @@ public class ProductionScanActivity extends AppCompatActivity {
         return debug.toString();
     }
 
-    private void saveToProductionScanned() throws SQLException {
-        try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
-            String insertItemsQuery = "INSERT INTO AST_PRODUCTION_ITEMS " +
-                    "(KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, CREATE_DATE) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-            String insertScannedQuery = "INSERT INTO AST_PRODUCTION_SCANNED " +
-                    "(KAREKODNO, MATERIAL_NAME, SCAN_DATE) " +
-                    "VALUES (?, ?, ?)";
 
-            conn.setAutoCommit(false);
-            try {
-                // Insert into AST_PRODUCTION_ITEMS
-                try (PreparedStatement itemsStmt = conn.prepareStatement(insertItemsQuery)) {
-                    for (ScannedItem item : scannedItems) {
-                        try {
-                            String qrCode = item.kareKodNo;
-                            // Only get the number after ENT for ITEMS table
-                            String kareKodNo = extractKareKodNoForItems(qrCode);
-                            String tedasKirilimValue = extractPattern(qrCode, TEDASKIRILIM_PATTERN);
-                            String actualTedasKirilim = tedasKirilimValue.split("ENT")[0];
-
-                            itemsStmt.setString(1, kareKodNo);  // Only the number part
-                            itemsStmt.setString(2, actualTedasKirilim);
-                            itemsStmt.setString(3, extractPattern(qrCode, MARKA_PATTERN));
-                            itemsStmt.setString(4, extractPattern(qrCode, MALZEME_PATTERN));
-                            itemsStmt.setString(5, extractPattern(qrCode, TIPI_PATTERN));
-                            itemsStmt.setString(6, extractPattern(qrCode, IMALYILI_PATTERN));
-                            itemsStmt.setString(7, extractBarcode(qrCode));
-
-                            SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
-                            java.util.Date parsedDate = dateFormat.parse(item.timestamp);
-                            java.sql.Timestamp sqlTimestamp = new java.sql.Timestamp(parsedDate.getTime());
-                            itemsStmt.setTimestamp(8, sqlTimestamp);
-
-                            itemsStmt.addBatch();
-                        } catch (Exception e) {
-                            conn.rollback();
-                            String debugInfo = getDebugInfo(item, e, itemsStmt);
-                            showDebugDialog("Veri Kaydetme Hatası", debugInfo);
-                            throw new SQLException("AST_PRODUCTION_ITEMS tablosuna veri eklenirken hata oluştu", e);
-                        }
-                    }
-
-                    int[] itemResults = itemsStmt.executeBatch();
-                    for (int i = 0; i < itemResults.length; i++) {
-                        if (itemResults[i] <= 0) {
-                            String debugInfo = getDebugInfo(scannedItems.get(i),
-                                    new Exception("Batch insert failed for item " + (i + 1)), itemsStmt);
-                            showDebugDialog("Batch İşlem Hatası", debugInfo);
-                            throw new SQLException("Batch insert failed for item " + (i + 1));
-                        }
-                    }
-                }
-
-                // Insert into AST_PRODUCTION_SCANNED
-                try (PreparedStatement scannedStmt = conn.prepareStatement(insertScannedQuery)) {
-                    for (ScannedItem item : scannedItems) {
-                        try {
-                            String qrCode = item.kareKodNo;
-                            String fullKareKodNo = extractKareKodNoForScanned(qrCode);
-                            String tedasKirilimValue = extractPattern(qrCode, TEDASKIRILIM_PATTERN);
-
-                            // First try to get KAREKODNO from the dedicated field
-                            fullKareKodNo = extractPattern(qrCode, KAREKODNO_PATTERN);
-
-                            // If empty, try to extract from TEDASKIRILIM
-                            if (fullKareKodNo.isEmpty() && tedasKirilimValue.contains("ENT")) {
-                                String[] parts = tedasKirilimValue.split("ENT");
-                                if (parts.length > 1) {
-                                    fullKareKodNo = parts[1];
-                                }
-                            }
-
-                            scannedStmt.setString(1, fullKareKodNo);  // Full KAREKODNO
-                            scannedStmt.setString(2, item.materialName);
-
-
-                            SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
-                            java.util.Date parsedDate = dateFormat.parse(item.timestamp);
-                            java.sql.Timestamp sqlTimestamp = new java.sql.Timestamp(parsedDate.getTime());
-                            scannedStmt.setTimestamp(3, sqlTimestamp);
-
-                            scannedStmt.addBatch();
-                        } catch (Exception e) {
-                            conn.rollback();
-                            String debugInfo = getDebugInfo(item, e, scannedStmt);
-                            showDebugDialog("Veri Kaydetme Hatası", debugInfo);
-                            throw new SQLException("AST_PRODUCTION_SCANNED tablosuna veri eklenirken hata oluştu", e);
-                        }
-                    }
-
-                    int[] scannedResults = scannedStmt.executeBatch();
-                    for (int i = 0; i < scannedResults.length; i++) {
-                        if (scannedResults[i] <= 0) {
-                            String debugInfo = getDebugInfo(scannedItems.get(i),
-                                    new Exception("Batch insert failed for scanned item " + (i + 1)), scannedStmt);
-                            showDebugDialog("Batch İşlem Hatası", debugInfo);
-                            throw new SQLException("Batch insert failed for scanned item " + (i + 1));
-                        }
-                    }
-                }
-
-                Log.d("SQL_DEBUG", "All operations successful, committing transaction");
-                conn.commit();
-            } catch (SQLException e) {
-                Log.e("SQL_DEBUG", "Error during database operations: " + e.getMessage(), e);
-                conn.rollback();
-                String debugInfo = getDebugInfo(scannedItems.get(0), e, null);
-                showDebugDialog("Veritabanı Hatası", debugInfo);
-                throw new SQLException("Veriler kaydedilirken hata oluştu", e);
-            } finally {
-                conn.setAutoCommit(true);
-            }
-        }
-    }
-    private String extractKareKodNoForItems(String qrCode) {
-        // For AST_PRODUCTION_ITEMS table - only get the number after ENT
-        String fullKareKodNo = extractPattern(qrCode, KAREKODNO_PATTERN);
-        if (fullKareKodNo.contains("ENT")) {
-            String[] parts = fullKareKodNo.split("ENT");
-            return parts.length > 1 ? parts[1] : "";
-        }
-        return fullKareKodNo;
-    }
-    private String extractKareKodNoForScanned(String qrCode) {
-        // For AST_PRODUCTION_SCANNED table - get the full KAREKODNO
-        return extractPattern(qrCode, KAREKODNO_PATTERN);
-    }
-    private String extractPattern(String qrCode, Pattern pattern) {
-        java.util.regex.Matcher matcher = pattern.matcher(qrCode);
-        return matcher.find() ? matcher.group(1).trim() : "";
-    }
-
-    private String extractBarcode(String qrCode) {
-        String[] parts = qrCode.split("\\|\\|");
-        return parts.length > 1 ? parts[parts.length - 1].trim() : "";
-    }
     // Camera and permission handling methods remain the same
     @Override
     protected void onPause() {
