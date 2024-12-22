@@ -16,6 +16,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TableLayout;
 import android.widget.TableRow;
@@ -77,9 +78,9 @@ public class ProductionScanActivity extends AppCompatActivity {
     private TableLayout tableLayout;
     private CameraSourcePreview cameraPreview;
     private TextView scanStatusTextView;
-    private Button saveButton;
-    private Button confirmButton;
-    private Button scanButton;
+    private ImageButton saveButton;
+    private ImageButton confirmButton;
+    private ImageButton scanButton;
     private String currentReceiptNo;
     private long lastScanTime = 0;
     private Toast currentToast;
@@ -111,12 +112,12 @@ public class ProductionScanActivity extends AppCompatActivity {
     }
 
     private void initializeButtons() {
-        // Initialize buttons
-        saveButton = findViewById(R.id.saveButton);
-        confirmButton = findViewById(R.id.confirmButton);
-        scanButton = findViewById(R.id.scanButton);
-        Button manualQrButton = findViewById(R.id.manualQrButton);
-        Button scannedItemsButton = findViewById(R.id.scanned_items_button);
+        // Initialize buttons with correct types
+        scanButton = (ImageButton) findViewById(R.id.scanButton);
+        confirmButton = (ImageButton) findViewById(R.id.confirmButton);
+        saveButton = (ImageButton) findViewById(R.id.draftButton);
+        ImageButton manualQrButton = (ImageButton) findViewById(R.id.manualQrButton);
+        ImageButton scannedItemsButton = (ImageButton) findViewById(R.id.scanned_items_button);
 
         // Set click listeners
         saveButton.setOnClickListener(v -> saveDraft());
@@ -514,8 +515,8 @@ public class ProductionScanActivity extends AppCompatActivity {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(20, 20, 20, 20);
 
-        EditText tedasKirilimInput = createEditText("Seri No (örn: 561007ENT22000401)");
-        EditText barcodeInput = createEditText("Barkod");
+        EditText tedasKirilimInput = createEditText("Stok No (örn: 561007ENT22000401)");
+        EditText barcodeInput = createEditText("Seri No");
         EditText imalYiliInput = createEditText("Yıl");
 
         layout.addView(tedasKirilimInput);
@@ -1016,6 +1017,11 @@ public class ProductionScanActivity extends AppCompatActivity {
             boolean hasScannedItems = !scannedKareKodNos.isEmpty();
             saveButton.setEnabled(hasScannedItems);
             confirmButton.setEnabled(hasScannedItems);
+
+            // Optional: you might want to adjust the alpha for better visual feedback
+            float alpha = hasScannedItems ? 1.0f : 0.5f;
+            saveButton.setAlpha(alpha);
+            confirmButton.setAlpha(alpha);
         });
     }
 
