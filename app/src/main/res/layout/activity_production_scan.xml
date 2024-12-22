@@ -44,35 +44,42 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_margin="8dp">
+
+            <Button
+                android:id="@+id/scanButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="Barkod Oku" />
+
+            <Button
+                android:id="@+id/manualQrButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Manuel Ürün Ekle" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:gravity="center">
-
-
             <Button
                 android:id="@+id/saveButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="0dp"
-                android:layout_marginLeft="8dp"
+                android:layout_marginEnd="8dp"
                 android:text="Taslak Kaydet" />
-
             <Button
-                android:id="@+id/manual_qr_button"
+                android:id="@+id/confirmButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="0dp"
-                android:layout_marginLeft="8dp"
-                android:text="Manuel Ürün Ekle" />
-
-
+                android:layout_gravity="center"
+                android:enabled="false"
+                android:text="Onayla" />
         </LinearLayout>
-        <Button
-            android:id="@+id/confirmButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="0dp"
-            android:layout_gravity="center"
-            android:enabled="false"
-            android:text="Onayla" />
+
     </LinearLayout>
 
 </ScrollView>

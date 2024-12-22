@@ -83,7 +83,7 @@ public class LoginActivity extends AppCompatActivity {
         if (hour >= 6 && hour < 18) {
             // Morning: Between 6 AM and 6 PM
             imageView.setImageResource(R.drawable.good_morning_img);
-            textView.setText("Sabahlar");
+            textView.setText("Günler");
         } else {
             // Night: Between 6 PM and 6 AM
             imageView.setImageResource(R.drawable.good_night_img);
