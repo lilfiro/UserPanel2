@@ -579,150 +579,7 @@ public class ProductionScanActivity extends AppCompatActivity {
         });
     }
 
-    private void showScannerInputDialog() {
-        if (isCameraActive) {
-            toggleCamera();
-        }
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Barkod Tarayıcı");
-
-
-        LinearLayout layout = createScannerInputLayout();
-        builder.setView(layout);
-        builder.setPositiveButton("Onayla", null);
-        builder.setNegativeButton("İptal", (dialog, which) -> dialog.dismiss());
-
-        AlertDialog dialog = builder.create();
-        setupScannerInputDialog(dialog, layout);
-        dialog.show();
-    }
-    private LinearLayout createScannerInputLayout() {
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(20, 20, 20, 20);
-
-        EditText scannerInput = createEditText("Barkod tarayıcı bekleniyor...");
-        scannerInput.requestFocus(); // Automatically focus the input field for scanner
-
-        layout.addView(scannerInput);
-
-        return layout;
-    }
-    private void setupScannerInputDialog(AlertDialog dialog, LinearLayout layout) {
-        EditText scannerInput = (EditText) layout.getChildAt(0);
-
-        scannerInput.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {}
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                String scannedData = s.toString().trim();
-                if (isValidQRFormat(scannedData)) {
-                    executorService.submit(() -> processScannerInput(scannedData, dialog));
-                }
-            }
-        });
-
-        dialog.setOnShowListener(dialogInterface -> {
-            scannerInput.requestFocus();
-            Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-            Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
-            positiveButton.setVisibility(View.GONE);
-            negativeButton.setVisibility(View.GONE);
-        });
-    }
-
-    private boolean isValidQRFormat(String qrCode) {
-        return qrCode.matches("\\|\\|KAREKODNO_.*\\|TEDASKIRILIM_.*\\|MARKA_.*\\|MALZEME_.*\\|TIPI_.*\\|IMALYILI_.*\\|\\|.*");
-    }
-
-    private void showProcessedItemDialog(QRCodeData data, String itemInfo) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("İşlenen Ürün Detayları");
-        builder.setMessage(formatScannedItemText(data.rawData, DATE_FORMAT.format(new Date())));
-        builder.setPositiveButton("Onayla", (dialog, which) -> {
-            processScannedItem(data, itemInfo, "SCANNER");
-            showScannerInputDialog(); // Reopen scanner dialog for next item
-        });
-        builder.show();
-    }
-    private void processScannerInput(String scannedData, AlertDialog dialog) {
-        try {
-            if (!isValidQRFormat(scannedData)) {
-                runOnUiThread(() -> {
-                    showToast("Geçersiz barkod formatı");
-                    clearAndRefocusInput(dialog);
-                });
-                return;
-            }
-
-            QRCodeData parsedData = parseQRCode(scannedData);
-            if (parsedData == null) {
-                runOnUiThread(() -> {
-                    showToast("Barkod ayrıştırma hatası");
-                    clearAndRefocusInput(dialog);
-                });
-                return;
-            }
-
-            String kareKodNoTedas = parsedData.kareKodNo.contains("ENT") ?
-                    parsedData.kareKodNo.split("ENT")[0] : "";
-
-            if (isAlreadyScanned(parsedData.kareKodNo)) {
-                runOnUiThread(() -> {
-                    showToast("Bu ürün zaten taranmış");
-                    clearAndRefocusInput(dialog);
-                });
-                return;
-            }
-
-            if (!validateTedasCode(kareKodNoTedas, parsedData.tedasKirilim, parsedData.barcode)) {
-                runOnUiThread(() -> {
-                    showToast("TEDAŞ kodu ve barkod eşleşmesi bulunamadı");
-                    clearAndRefocusInput(dialog);
-                });
-                return;
-            }
-
-            String itemInfo = getItemInfoFromDatabase(parsedData.tedasKirilim, parsedData.barcode);
-            if (itemInfo == null) {
-                runOnUiThread(() -> {
-                    showToast("Ürün veya TEDAŞ eşleşmesi bulunamadı");
-                    clearAndRefocusInput(dialog);
-                });
-                return;
-            }
-
-            runOnUiThread(() -> {
-                dialog.dismiss();
-                showProcessedItemDialog(parsedData, itemInfo);
-            });
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error processing scanner input", e);
-            runOnUiThread(() -> {
-                showToast("İşlem sırasında hata oluştu: " + e.getMessage());
-                clearAndRefocusInput(dialog);
-            });
-        }
-    }
-
-    private void clearAndRefocusInput(AlertDialog dialog) {
-        View dialogView = dialog.findViewById(android.R.id.content);
-        if (dialogView instanceof ViewGroup) {
-            View firstChild = ((ViewGroup) dialogView).getChildAt(0);
-            if (firstChild instanceof EditText) {
-                EditText input = (EditText) firstChild;
-                input.setText("");
-                input.requestFocus();
-            }
-        }
-    }
     private void handleManualInput(String fullKareKodNo, String barcode, String imalYili, AlertDialog dialog) {
         if (fullKareKodNo.isEmpty() || barcode.isEmpty() || imalYili.isEmpty()) {
             showToast("Lütfen tüm alanları doldurun");
@@ -873,6 +730,150 @@ public class ProductionScanActivity extends AppCompatActivity {
                 imalYili,
                 barcode);
     }
+    private void showScannerInputDialog() {
+        if (isCameraActive) {
+            toggleCamera();
+        }
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Barkod Tarayıcı");
+
+
+        LinearLayout layout = createScannerInputLayout();
+        builder.setView(layout);
+        builder.setPositiveButton("Onayla", null);
+        builder.setNegativeButton("İptal", (dialog, which) -> dialog.dismiss());
+
+        AlertDialog dialog = builder.create();
+        setupScannerInputDialog(dialog, layout);
+        dialog.show();
+    }
+    private LinearLayout createScannerInputLayout() {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(20, 20, 20, 20);
+
+        EditText scannerInput = createEditText("Barkod tarayıcı bekleniyor...");
+        scannerInput.requestFocus(); // Automatically focus the input field for scanner
+
+        layout.addView(scannerInput);
+
+        return layout;
+    }
+    private void setupScannerInputDialog(AlertDialog dialog, LinearLayout layout) {
+        EditText scannerInput = (EditText) layout.getChildAt(0);
+
+        scannerInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                String scannedData = s.toString().trim();
+                if (isValidQRFormat(scannedData)) {
+                    executorService.submit(() -> processScannerInput(scannedData, dialog, scannerInput));
+                }
+            }
+        });
+
+        dialog.setOnShowListener(dialogInterface -> {
+            scannerInput.requestFocus();
+            Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+            positiveButton.setVisibility(View.GONE);
+            negativeButton.setVisibility(View.GONE);
+        });
+    }
+
+
+    private boolean isValidQRFormat(String qrCode) {
+        return qrCode.matches("\\|\\|KAREKODNO_.*\\|TEDASKIRILIM_.*\\|MARKA_.*\\|MALZEME_.*\\|TIPI_.*\\|IMALYILI_.*\\|\\|.*");
+    }
+
+    private void showProcessedItemDialog(QRCodeData data, String itemInfo) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("İşlenen Ürün Detayları");
+        builder.setMessage(formatScannedItemText(data.rawData, DATE_FORMAT.format(new Date())));
+        builder.setPositiveButton("Onayla", (dialog, which) -> {
+            processScannedItem(data, itemInfo, "SCANNER");
+            showScannerInputDialog(); // Reopen scanner dialog for next item
+        });
+        builder.show();
+    }
+    private void processScannerInput(String scannedData, AlertDialog dialog, EditText scannerInput) {
+        try {
+            if (!isValidQRFormat(scannedData)) {
+                runOnUiThread(() -> {
+                    showAlertDialog("Hata", "Geçersiz barkod formatı", scannerInput);
+                });
+                return;
+            }
+
+            QRCodeData parsedData = parseQRCode(scannedData);
+            if (parsedData == null) {
+                runOnUiThread(() -> {
+                    showAlertDialog("Hata", "Barkod ayrıştırma hatası", scannerInput);
+                });
+                return;
+            }
+
+            String kareKodNoTedas = parsedData.kareKodNo.contains("ENT") ?
+                    parsedData.kareKodNo.split("ENT")[0] : "";
+
+            if (isAlreadyScanned(parsedData.kareKodNo)) {
+                runOnUiThread(() -> {
+                    showAlertDialog("Uyarı", "Bu ürün zaten taranmış", scannerInput);
+                });
+                return;
+            }
+
+            if (!validateTedasCode(kareKodNoTedas, parsedData.tedasKirilim, parsedData.barcode)) {
+                runOnUiThread(() -> {
+                    showAlertDialog("Hata", "TEDAŞ kodu ve barkod eşleşmesi bulunamadı", scannerInput);
+                });
+                return;
+            }
+
+            String itemInfo = getItemInfoFromDatabase(parsedData.tedasKirilim, parsedData.barcode);
+            if (itemInfo == null) {
+                runOnUiThread(() -> {
+                    showAlertDialog("Hata", "Ürün veya TEDAŞ eşleşmesi bulunamadı", scannerInput);
+                });
+                return;
+            }
+
+            runOnUiThread(() -> {
+                dialog.dismiss();
+                showProcessedItemDialog(parsedData, itemInfo);
+            });
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error processing scanner input", e);
+            runOnUiThread(() -> {
+                showAlertDialog("Hata", "İşlem sırasında hata oluştu: " + e.getMessage(), scannerInput);
+            });
+        }
+    }
+    private void showAlertDialog(String title, String message, EditText scannerInput) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(title);
+        builder.setMessage(message);
+        builder.setPositiveButton("Tamam", (dialog, which) -> {
+            clearAndRefocusInput(scannerInput);
+            dialog.dismiss();
+        });
+        builder.setOnDismissListener(dialog -> clearAndRefocusInput(scannerInput));
+        builder.show();
+    }
+
+    private void clearAndRefocusInput(EditText scannerInput) {
+        scannerInput.setText(""); // Clear the input field
+        scannerInput.requestFocus(); // Refocus on the input field
+    }
+
 
     private void showScannedItemsList() {
         if (scannedItems.isEmpty()) {
