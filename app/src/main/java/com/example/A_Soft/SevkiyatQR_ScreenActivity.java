@@ -983,6 +983,19 @@ class CameraSourcePreview extends ViewGroup {
 
         addView(surfaceView);
     }
+    public void hidePreview() {
+        if (surfaceView != null) {
+            surfaceView.setVisibility(View.GONE);
+            Log.d("CameraPreview", "SurfaceView hidden");
+        }
+    }
+
+    public void showPreview() {
+        if (surfaceView != null) {
+            surfaceView.setVisibility(View.VISIBLE);
+            Log.d("CameraPreview", "SurfaceView visible");
+        }
+    }
 
     public void startCamera() {
         if (isSurfaceReady && cameraSource != null) {
