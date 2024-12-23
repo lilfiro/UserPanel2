@@ -713,7 +713,7 @@ public class ProductionScanActivity extends AppCompatActivity {
              PreparedStatement stmt = conn.prepareStatement(
                      "SELECT i.DESCRIPTION, i.GROUPCODE, t.ITM_TEDAS " +
                              "FROM AST_ITEMS i " +
-                             "JOIN AST_TEMS_TEDAS t ON i.CODE = t.CODE " +
+                             "JOIN AST_TEMS_TEDAS t ON i.CODE = t.ITM_CODE " +
                              "WHERE i.CODE = ? AND t.ITM_TEDAS = ?")) {
 
             stmt.setString(1, barcode.trim());
@@ -753,7 +753,7 @@ public class ProductionScanActivity extends AppCompatActivity {
 
         try (Connection conn = databaseHelper.getAnatoliaSoftConnection();
              PreparedStatement stmt = conn.prepareStatement(
-                     "SELECT COUNT(*) FROM AST_TEMS_TEDAS WHERE CODE = ? AND ITM_TEDAS = ?")) {
+                     "SELECT COUNT(*) FROM AST_TEMS_TEDAS WHERE ITM_CODE = ? AND ITM_TEDAS = ?")) {
 
             stmt.setString(1, barcode.trim());
             stmt.setString(2, tedasKirilim.trim());
