@@ -14,15 +14,18 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:stretchColumns="1"
-            android:paddingBottom="100dp">
+            android:paddingBottom="16dp">
 
-            <TableRow>
+            <TableRow
+                android:background="@color/colorPrimary"
+                android:padding="8dp">
                 <TextView
                     android:id="@+id/column_material"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Malzemeler"
                     android:padding="8dp"
+                    android:textColor="@android:color/white"
                     android:gravity="center"/>
 
                 <TextView
@@ -31,6 +34,7 @@
                     android:layout_height="wrap_content"
                     android:text="Okutulacak Miktar"
                     android:padding="8dp"
+                    android:textColor="@android:color/white"
                     android:gravity="center"/>
 
                 <TextView
@@ -39,114 +43,148 @@
                     android:layout_height="wrap_content"
                     android:text="Okunan Miktar"
                     android:padding="8dp"
+                    android:textColor="@android:color/white"
                     android:gravity="center"/>
             </TableRow>
 
-            <!-- Empty rows for dynamic data population -->
-            <TableRow>
-                <TextView
-                    android:id="@+id/material_1"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:padding="8dp"
-                    android:gravity="center"/>
-
-                <TextView
-                    android:id="@+id/expected_quantity_1"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:padding="8dp"
-                    android:gravity="center"/>
-
-                <TextView
-                    android:id="@+id/scanned_quantity_1"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:padding="8dp"
-                    android:gravity="center"/>
-            </TableRow>
-
-            <TableRow>
-                <TextView
-                    android:id="@+id/material_2"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:padding="8dp"
-                    android:gravity="center"/>
-
-                <TextView
-                    android:id="@+id/expected_quantity_2"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:padding="8dp"
-                    android:gravity="center"/>
-
-                <TextView
-                    android:id="@+id/scanned_quantity_2"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:padding="8dp"
-                    android:gravity="center"/>
-            </TableRow>
+            <!-- Dynamic rows will be added here -->
 
         </TableLayout>
 
-        <!-- QR Code Scanner -->
-        <com.example.A_Soft.CameraSourcePreview
-            android:id="@+id/camera_preview"
+        <!-- Camera Preview with Border -->
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="440dp" />
+            android:layout_height="wrap_content"
+            android:padding="2dp"
+            android:background="@drawable/camera_border"
+            android:layout_marginTop="8dp">
 
-        <TextView
-            android:id="@+id/notificationText"
-            android:layout_width="189dp"
-            android:layout_height="24dp"
-            android:layout_gravity="top|center"
-            android:background="@android:color/black"
-            android:padding="8dp"
-            android:text="Scan a QR Code"
-            android:textColor="@android:color/white"
-            android:textSize="18sp"
-            android:visibility="invisible" />
+            <com.example.A_Soft.CameraSourcePreview
+                android:id="@+id/camera_preview"
+                android:layout_width="match_parent"
+                android:layout_height="375dp"/>
+
+            <!-- Scan Area Indicator -->
+            <View
+                android:layout_width="200dp"
+                android:layout_height="200dp"
+                android:layout_gravity="center"
+                android:background="@drawable/scan_area"/>
+
+        </FrameLayout>
 
         <TextView
             android:id="@+id/scan_status"
             android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:text="Okutulacak ürünler:" />
 
+        <!-- Main Buttons Grid -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center">
+            android:gravity="center"
+            android:layout_marginTop="16dp">
 
-
-            <Button
-                android:id="@+id/save_draft_button"
-                android:layout_width="wrap_content"
+            <!-- Barcode Scan Button -->
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="0dp"
-                android:layout_marginLeft="8dp"
-                android:text="Taslak Kaydet" />
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/scanButton"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:src="@drawable/barcode_scan"
+                    android:scaleType="fitCenter"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:padding="8dp"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Barkod Oku"
+                    android:textSize="12sp"/>
+            </LinearLayout>
 
-            <Button
-                android:id="@+id/manual_qr_button"
-                android:layout_width="wrap_content"
+            <!-- Manual Input Button -->
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="0dp"
-                android:layout_marginLeft="8dp"
-                android:text="Manuel Ürün Ekle" />
-
-
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/manual_qr_button"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:src="@drawable/input"
+                    android:scaleType="fitCenter"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:padding="8dp"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Manuel Giriş"
+                    android:textSize="12sp"/>
+            </LinearLayout>
         </LinearLayout>
-        <Button
-            android:id="@+id/confirm_receipt_button"
-            android:layout_width="wrap_content"
+
+        <!-- Bottom Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="0dp"
-            android:layout_gravity="center"
-            android:enabled="false"
-            android:text="Onayla" />
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="16dp">
+
+            <!-- Save Draft Button -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/save_draft_button"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:src="@drawable/draft"
+                    android:scaleType="fitCenter"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:padding="8dp"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Taslak Kaydet"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+
+            <!-- Confirm Button -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/confirm_receipt_button"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:src="@drawable/check"
+                    android:scaleType="fitCenter"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:padding="8dp"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Onayla"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+        </LinearLayout>
+
     </LinearLayout>
 </ScrollView>

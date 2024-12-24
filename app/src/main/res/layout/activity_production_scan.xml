@@ -18,61 +18,200 @@
             android:padding="2dp"
             android:background="@android:color/white">
         </TableLayout>
-        <Button
-            android:id="@+id/scanned_items_button"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginTop="0dp"
-            android:layout_marginLeft="8dp"
-            android:layout_gravity="end"
-            android:text="" />
-        <!-- Camera Preview -->
-        <com.example.A_Soft.CameraSourcePreview
-            android:id="@+id/camera_preview"
+
+        <!-- List Button -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="440dp" />
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/camera_state"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@drawable/camera_off"
+                    android:scaleType="fitCenter"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:padding="8dp"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Kamera"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"/>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/scanned_items_button"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@drawable/list"
+                    android:scaleType="fitCenter"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:padding="8dp"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Liste"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="2dp"
+            android:background="@drawable/camera_border"
+            android:layout_marginTop="8dp">
+
+            <com.example.A_Soft.CameraSourcePreview
+                android:id="@+id/camera_preview"
+                android:layout_width="375dp"
+                android:layout_height="375dp"
+                android:visibility="gone" />
+
+
+            <!-- Optional Scan Area Indicator -->
+            <View
+                android:id="@+id/scan_area_indicator"
+                android:layout_width="200dp"
+                android:layout_height="200dp"
+                android:layout_gravity="center"
+                android:background="@drawable/scan_area"
+                android:visibility="gone" />
+
+
+        </FrameLayout>
 
         <!-- Scan Status -->
         <TextView
             android:id="@+id/scan_status"
             android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:text="Toplam Okutulan: 0"/>
 
-        <!-- Buttons Container -->
+        <!-- Main Buttons Grid -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center">
+            android:gravity="center"
+            android:layout_marginTop="16dp">
 
-
-            <Button
-                android:id="@+id/saveButton"
-                android:layout_width="wrap_content"
+            <!-- Scan Button -->
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="0dp"
-                android:layout_marginLeft="8dp"
-                android:text="Taslak Kaydet" />
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/scanButton"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:src="@drawable/barcode_scan"
+                    android:scaleType="fitCenter"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:padding="8dp"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Barkod Oku"
+                    android:textSize="12sp"/>
+            </LinearLayout>
 
-            <Button
-                android:id="@+id/manual_qr_button"
-                android:layout_width="wrap_content"
+            <!-- Manual Input Button -->
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="0dp"
-                android:layout_marginLeft="8dp"
-                android:text="Manuel Ürün Ekle" />
-
-
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/manualQrButton"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:src="@drawable/input"
+                    android:scaleType="fitCenter"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:padding="8dp"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Manuel Giriş"
+                    android:textSize="12sp"/>
+            </LinearLayout>
         </LinearLayout>
-        <Button
-            android:id="@+id/confirmButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="0dp"
-            android:layout_gravity="center"
-            android:enabled="false"
-            android:text="Onayla" />
-    </LinearLayout>
 
+        <!-- Bottom Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="16dp">
+
+            <!-- Save Draft Button -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/draftButton"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:src="@drawable/draft"
+                    android:scaleType="fitCenter"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:padding="8dp"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Taslak Kaydet"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+
+            <!-- Confirm Button -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/confirmButton"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:src="@drawable/check"
+                    android:scaleType="fitCenter"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:padding="8dp"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Onayla"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
 </ScrollView>

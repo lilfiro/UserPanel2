@@ -5,9 +5,11 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TableLayout;
 import android.widget.TableRow;
@@ -66,7 +68,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     private TableLayout tableLayout;
     private CameraSourcePreview cameraPreview;
     private TextView scanStatusTextView;
-    private Button confirmReceiptButton;
+    private ImageButton confirmReceiptButton;
     private DatabaseHelper databaseHelper;
     private String currentReceiptNo;
     private ReceiptItemManager itemManager;
@@ -75,9 +77,10 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     private long lastScanTime = 0;
     private static final long SCAN_DEBOUNCE_INTERVAL = 2000; // 2 seconds
 
+
     private static final String PREF_NAME = "SevkiyatDrafts";
     private static final String KEY_DRAFT_DATA = "draft_data";
-    private Button saveAsDraftButton;
+    private ImageButton saveAsDraftButton;
     private SharedPreferences sharedPreferences;
 
     @Override
@@ -120,6 +123,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     }
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 // Permission granted, proceed with setting up barcode detection
@@ -137,10 +141,12 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         cameraPreview = findViewById(R.id.camera_preview);
         scanStatusTextView = findViewById(R.id.scan_status);
         confirmReceiptButton = findViewById(R.id.confirm_receipt_button);
-        Button manualQrButton = findViewById(R.id.manual_qr_button);
+        ImageButton manualQrButton = findViewById(R.id.manual_qr_button);
         // Add Save as Draft button
         saveAsDraftButton = findViewById(R.id.save_draft_button);
         saveAsDraftButton.setOnClickListener(v -> saveDraft());
+        ImageButton scanButton = findViewById(R.id.scanButton);
+        scanButton.setOnClickListener(v -> showScannerInputDialog());
 
         // Style the table
         styleTableLayout();
@@ -166,6 +172,73 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                 showAlert("Uyarı", "Tamamlanmadan önce tüm malzemeler taratılmalıdır.");
             }
         });
+    }
+    private void showScannerInputDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Barkod Okut");
+
+        // Create layout for dialog
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(20, 20, 20, 20);
+
+        // Create input field
+        final EditText scanInput = new EditText(this);
+        scanInput.setHint("Barkod");
+        scanInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        layout.addView(scanInput);
+
+        builder.setView(layout);
+
+        // Set up the buttons
+        builder.setPositiveButton("Onayla", null); // We'll override this below
+        builder.setNegativeButton("İptal", (dialog, which) -> dialog.dismiss());
+
+        AlertDialog dialog = builder.create();
+
+        // Override the positive button to handle validation
+        dialog.setOnShowListener(dialogInterface -> {
+            Button button = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            button.setOnClickListener(view -> {
+                String scannedData = scanInput.getText().toString().trim();
+
+                if (scannedData.isEmpty()) {
+                    showAlert("Uyarı", "Lütfen barkod okutunuz");
+                    return;
+                }
+
+                // Extract the KAREKODNO from the scanned format
+                Pattern pattern = Pattern.compile("KAREKODNO_([^|]+)");
+                Matcher matcher = pattern.matcher(scannedData);
+
+                if (!matcher.find()) {
+                    showAlert("Hata", "Geçersiz barkod formatı");
+                    return;
+                }
+
+                String karekodno = matcher.group(1);
+
+                // Extract the item code (last part after ||)
+                String[] parts = scannedData.split("\\|\\|");
+                if (parts.length < 2) {
+                    showAlert("Hata", "Geçersiz barkod formatı");
+                    return;
+                }
+
+                String itemCode = parts[parts.length - 1].trim();
+
+                // Format the data in the expected QR format
+                String formattedData = String.format("KAREKODNO_%s||%s", karekodno, itemCode);
+
+                dialog.dismiss();
+                processQRCode(formattedData);
+            });
+        });
+
+        dialog.show();
+
+        // Set focus to the input field and show keyboard
+        scanInput.requestFocus();
     }
     private void saveDraft() {
         DraftData draftData = new DraftData(
@@ -910,6 +983,19 @@ class CameraSourcePreview extends ViewGroup {
 
         addView(surfaceView);
     }
+    public void hidePreview() {
+        if (surfaceView != null) {
+            surfaceView.setVisibility(View.GONE);
+            Log.d("CameraPreview", "SurfaceView hidden");
+        }
+    }
+
+    public void showPreview() {
+        if (surfaceView != null) {
+            surfaceView.setVisibility(View.VISIBLE);
+            Log.d("CameraPreview", "SurfaceView visible");
+        }
+    }
 
     public void startCamera() {
         if (isSurfaceReady && cameraSource != null) {
@@ -939,6 +1025,40 @@ class CameraSourcePreview extends ViewGroup {
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         int width = right - left;
         int height = bottom - top;
-        surfaceView.layout(0, 250, width, height);
+
+        // Center the surface view within the available space
+        int surfaceWidth = width;
+        int surfaceHeight = height;
+
+        // If you want to maintain a square aspect ratio
+        int size = Math.min(width, height);
+        surfaceWidth = size;
+        surfaceHeight = size;
+
+        // Calculate the position to center the surface view
+        int leftOffset = (width - surfaceWidth) / 2;
+        int topOffset = (height - surfaceHeight) / 2;
+
+        surfaceView.layout(
+                leftOffset,
+                topOffset,
+                leftOffset + surfaceWidth,
+                topOffset + surfaceHeight
+        );
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        // Get the width measurement
+        int width = getDefaultSize(getSuggestedMinimumWidth(), widthMeasureSpec);
+
+        // Make the height match the width for a square preview
+        setMeasuredDimension(width, width);
+
+        // Measure the surface view with the same dimensions
+        surfaceView.measure(
+                MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY)
+        );
     }
 }
