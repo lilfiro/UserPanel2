@@ -1,71 +1,111 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:gravity="center">
+    android:layout_height="match_parent">
 
-    <LinearLayout
-        android:layout_width="wrap_content"
+    <!-- Logout Button Layout -->
+    <RelativeLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="end">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center">
+
+        <ImageButton
+            android:id="@+id/button_logout"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/logout"
+            android:background="@null"
+            android:contentDescription="Çıkış"
+            android:scaleType="centerInside" />
+
+        <TextView
+            android:id="@+id/label_logout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Çıkış"
+            android:textAlignment="center"
+            android:textSize="14sp"
+            android:textColor="#000" />
+        </LinearLayout>
+
+
+    </RelativeLayout>
+
+    <!-- Main Content Layout -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:gravity="center">
 
-        <!-- Üretim Icon and Label -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:layout_margin="30dp">
+            android:orientation="horizontal"
+            android:gravity="center">
 
-            <ImageButton
-                android:id="@+id/button_uretim"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:src="@drawable/uretim_icon"
-                android:background="@null"
-                android:contentDescription="Üretim"
-                android:scaleType="centerInside" />
-
-            <TextView
-                android:id="@+id/label_uretim"
+            <!-- Üretim Icon and Label -->
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Üretim"
-                android:textAlignment="center"
-                android:textSize="14sp"
-                android:textColor="#000" />
-        </LinearLayout>
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_margin="30dp">
 
-        <!-- Sevkiyat Icon and Label -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:layout_margin="30dp">
+                <ImageButton
+                    android:id="@+id/button_uretim"
+                    android:layout_width="100dp"
+                    android:layout_height="100dp"
+                    android:src="@drawable/uretim_icon"
+                    android:background="@null"
+                    android:contentDescription="Üretim"
+                    android:scaleType="centerInside" />
 
-            <ImageButton
-                android:id="@+id/button_sevkiyat"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:src="@drawable/sevkiyat_icon"
-                android:background="@null"
-                android:contentDescription="Sevkiyat"
-                android:scaleType="centerInside" />
+                <TextView
+                    android:id="@+id/label_uretim"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Üretim"
+                    android:textAlignment="center"
+                    android:textSize="14sp"
+                    android:textColor="#000" />
+            </LinearLayout>
 
-            <TextView
-                android:id="@+id/label_sevkiyat"
+            <!-- Sevkiyat Icon and Label -->
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Sevkiyat"
-                android:textAlignment="center"
-                android:textSize="14sp"
-                android:textColor="#000" />
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_margin="30dp">
+
+                <ImageButton
+                    android:id="@+id/button_sevkiyat"
+                    android:layout_width="100dp"
+                    android:layout_height="100dp"
+                    android:src="@drawable/sevkiyat_icon"
+                    android:background="@null"
+                    android:contentDescription="Sevkiyat"
+                    android:scaleType="centerInside" />
+
+                <TextView
+                    android:id="@+id/label_sevkiyat"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Sevkiyat"
+                    android:textAlignment="center"
+                    android:textSize="14sp"
+                    android:textColor="#000" />
+            </LinearLayout>
+
         </LinearLayout>
-
-    </LinearLayout>
-
+    </RelativeLayout>
 </RelativeLayout>

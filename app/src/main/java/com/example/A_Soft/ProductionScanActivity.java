@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.Handler;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
@@ -21,6 +22,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
@@ -88,16 +90,19 @@ public class ProductionScanActivity extends AppCompatActivity {
     private long lastScanTime = 0;
     private Toast currentToast;
     private String lastScannedQR = "";
-    private final boolean isProcessing = false;
+    private boolean isProcessing = false;
     private ImageButton cameraStateButton;
     private boolean isCameraActive = false;
 
+    private String currentOperator;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_production_scan);
-
+        // Get logged in username from SharedPreferences
+        SharedPreferences loginPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
+        currentOperator = loginPrefs.getString("logged_in_username", "");
         initializeBasicComponents();
         loadDraftData();
         requestCameraPermissionIfNeeded();
@@ -443,9 +448,20 @@ public class ProductionScanActivity extends AppCompatActivity {
     }
 
     private void batchInsertProductionItems(Connection conn) throws SQLException {
+        // First, get all existing full KAREKODNOs (including the ENT part)
+        Set<String> existingCodes = new HashSet<>();
+        try (PreparedStatement stmt = conn.prepareStatement(
+                "SELECT TEDASKIRILIM + 'ENT' + KAREKODNO as FULL_KAREKODNO FROM AST_PRODUCTION_ITEMS")) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    existingCodes.add(rs.getString("FULL_KAREKODNO"));
+                }
+            }
+        }
+
         String insertItemsQuery = "INSERT INTO AST_PRODUCTION_ITEMS " +
-                "(KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, CREATE_DATE, STATUS) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "(KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, CREATE_DATE, STATUS, OPERATOR) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";  // Added OPERATOR parameter
 
         try (PreparedStatement itemsStmt = conn.prepareStatement(insertItemsQuery)) {
             for (ScannedItem item : scannedItems) {
@@ -456,6 +472,12 @@ public class ProductionScanActivity extends AppCompatActivity {
                     fullKareKodNo = extractPattern(qrCode, "TEDASKIRILIM");
                 }
 
+                // Skip if this full KAREKODNO (including ENT part) already exists in the database
+                if (existingCodes.contains(fullKareKodNo)) {
+                    Log.d(TAG, "Skipping existing item: " + fullKareKodNo);
+                    continue;
+                }
+
                 String kareKodNoForItems = extractKareKodNoAfterENT(fullKareKodNo);
                 String tedasKirilim = extractTedasKirilimBeforeENT(fullKareKodNo);
 
@@ -463,11 +485,12 @@ public class ProductionScanActivity extends AppCompatActivity {
                 itemsStmt.setString(2, tedasKirilim);
                 itemsStmt.setString(3, extractPattern(qrCode, "MARKA"));
                 itemsStmt.setString(4, extractPattern(qrCode, "MALZEME"));
-                itemsStmt.setString(5, extractPattern(qrCode, "TIPI")); // Use QR code TIPI value
+                itemsStmt.setString(5, extractPattern(qrCode, "TIPI"));
                 itemsStmt.setString(6, extractPattern(qrCode, "IMALYILI"));
                 itemsStmt.setString(7, extractBarcode(qrCode));
                 itemsStmt.setTimestamp(8, convertToSqlTimestamp(item.timestamp));
-                itemsStmt.setString(9, item.entryMethod); // Add entry method
+                itemsStmt.setString(9, item.entryMethod);
+                itemsStmt.setString(10, currentOperator);  // Add operator information
 
                 itemsStmt.addBatch();
             }
@@ -475,10 +498,20 @@ public class ProductionScanActivity extends AppCompatActivity {
             executeBatchWithValidation(itemsStmt, "AST_PRODUCTION_ITEMS");
         }
     }
-
     private void batchInsertProductionScanned(Connection conn) throws SQLException {
+        // First, get all existing KAREKODNOs
+        Set<String> existingCodes = new HashSet<>();
+        try (PreparedStatement stmt = conn.prepareStatement(
+                "SELECT KAREKODNO FROM AST_PRODUCTION_SCANNED")) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    existingCodes.add(rs.getString("KAREKODNO"));
+                }
+            }
+        }
+
         String insertScannedQuery = "INSERT INTO AST_PRODUCTION_SCANNED " +
-                "(KAREKODNO, MATERIAL_NAME, SCAN_DATE) VALUES (?, ?, ?)";
+                "(KAREKODNO, MATERIAL_NAME, SCAN_DATE) VALUES (?, ?, ?)";  // Added OPERATOR
 
         try (PreparedStatement scannedStmt = conn.prepareStatement(insertScannedQuery)) {
             for (ScannedItem item : scannedItems) {
@@ -487,17 +520,33 @@ public class ProductionScanActivity extends AppCompatActivity {
                     fullKareKodNo = extractPattern(item.kareKodNo, "TEDASKIRILIM");
                 }
 
+                // Log the KAREKODNO being inserted
+                Log.d(TAG, "Inserting Scanned Item: KAREKODNO=" + fullKareKodNo);
+
+                // Skip if this item already exists
+                if (existingCodes.contains(fullKareKodNo)) {
+                    continue;
+                }
+
                 scannedStmt.setString(1, fullKareKodNo);
                 scannedStmt.setString(2, item.materialName);
-                scannedStmt.setTimestamp(3, convertToSqlTimestamp(item.timestamp));
+                scannedStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
 
                 scannedStmt.addBatch();
             }
 
-            executeBatchWithValidation(scannedStmt, "AST_PRODUCTION_SCANNED");
+            try {
+                int[] results = scannedStmt.executeBatch();
+                // Log the results
+                for (int i = 0; i < results.length; i++) {
+                    Log.d(TAG, "Batch result " + i + ": " + results[i]);
+                }
+            } catch (SQLException e) {
+                Log.e(TAG, "Error executing batch insert: " + e.getMessage(), e);
+                throw e;
+            }
         }
     }
-
     private void executeBatchWithValidation(PreparedStatement stmt, String tableName) throws SQLException {
         int[] results = stmt.executeBatch();
         for (int i = 0; i < results.length; i++) {
@@ -508,25 +557,6 @@ public class ProductionScanActivity extends AppCompatActivity {
                 throw new SQLException("Batch insert failed for " + tableName + " item " + (i + 1));
             }
         }
-    }
-
-    private String getMaterialNameFromDatabase(String barcode) {
-        try (Connection conn = databaseHelper.getAnatoliaSoftConnection();
-             PreparedStatement stmt = conn.prepareStatement(
-                     "SELECT DESCRIPTION, GROUPCODE FROM AST_ITEMS WHERE CODE = ?")) {
-
-            stmt.setString(1, barcode);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    String dbTipi = rs.getString("DESCRIPTION");
-                    String dbMalzeme = rs.getString("GROUPCODE");
-                    return dbMalzeme + " " + dbTipi;
-                }
-            }
-        } catch (SQLException e) {
-            Log.e(TAG, "Database error while checking item", e);
-        }
-        return "";
     }
 
     private void showManualQRInputDialog() {
@@ -738,7 +768,6 @@ public class ProductionScanActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Barkod Tarayıcı");
 
-
         LinearLayout layout = createScannerInputLayout();
         builder.setView(layout);
         builder.setPositiveButton("Onayla", null);
@@ -772,9 +801,15 @@ public class ProductionScanActivity extends AppCompatActivity {
 
             @Override
             public void afterTextChanged(Editable s) {
+                if (isProcessing) return; // Prevent re-entry
+                isProcessing = true;
+
                 String scannedData = s.toString().trim();
                 if (isValidQRFormat(scannedData)) {
                     executorService.submit(() -> processScannerInput(scannedData, dialog, scannerInput));
+                } else {
+                    // Reset flag if format is invalid
+                    isProcessing = false;
                 }
             }
         });
@@ -787,8 +822,6 @@ public class ProductionScanActivity extends AppCompatActivity {
             negativeButton.setVisibility(View.GONE);
         });
     }
-
-
     private boolean isValidQRFormat(String qrCode) {
         return qrCode.matches("\\|\\|KAREKODNO_.*\\|TEDASKIRILIM_.*\\|MARKA_.*\\|MALZEME_.*\\|TIPI_.*\\|IMALYILI_.*\\|\\|.*");
     }
@@ -798,8 +831,10 @@ public class ProductionScanActivity extends AppCompatActivity {
         builder.setTitle("İşlenen Ürün Detayları");
         builder.setMessage(formatScannedItemText(data.rawData, DATE_FORMAT.format(new Date())));
         builder.setPositiveButton("Onayla", (dialog, which) -> {
-            processScannedItem(data, itemInfo, "SCANNER");
-            showScannerInputDialog(); // Reopen scanner dialog for next item
+            new Handler().postDelayed(() -> { // Delay before reopening scanner
+                processScannedItem(data, itemInfo, "SCANNER");
+                showScannerInputDialog();
+            }, 500); // 500ms delay
         });
         builder.show();
     }
@@ -808,6 +843,7 @@ public class ProductionScanActivity extends AppCompatActivity {
             if (!isValidQRFormat(scannedData)) {
                 runOnUiThread(() -> {
                     showAlertDialog("Hata", "Geçersiz barkod formatı", scannerInput);
+                    isProcessing = false;
                 });
                 return;
             }
@@ -816,16 +852,17 @@ public class ProductionScanActivity extends AppCompatActivity {
             if (parsedData == null) {
                 runOnUiThread(() -> {
                     showAlertDialog("Hata", "Barkod ayrıştırma hatası", scannerInput);
+                    isProcessing = false;
                 });
                 return;
             }
 
-            String kareKodNoTedas = parsedData.kareKodNo.contains("ENT") ?
-                    parsedData.kareKodNo.split("ENT")[0] : "";
+            String kareKodNoTedas = parsedData.kareKodNo.contains("ENT") ? parsedData.kareKodNo.split("ENT")[0] : "";
 
             if (isAlreadyScanned(parsedData.kareKodNo)) {
                 runOnUiThread(() -> {
                     showAlertDialog("Uyarı", "Bu ürün zaten taranmış", scannerInput);
+                    isProcessing = false;
                 });
                 return;
             }
@@ -833,6 +870,7 @@ public class ProductionScanActivity extends AppCompatActivity {
             if (!validateTedasCode(kareKodNoTedas, parsedData.tedasKirilim, parsedData.barcode)) {
                 runOnUiThread(() -> {
                     showAlertDialog("Hata", "TEDAŞ kodu ve barkod eşleşmesi bulunamadı", scannerInput);
+                    isProcessing = false;
                 });
                 return;
             }
@@ -841,19 +879,24 @@ public class ProductionScanActivity extends AppCompatActivity {
             if (itemInfo == null) {
                 runOnUiThread(() -> {
                     showAlertDialog("Hata", "Ürün veya TEDAŞ eşleşmesi bulunamadı", scannerInput);
+                    isProcessing = false;
                 });
                 return;
             }
 
             runOnUiThread(() -> {
                 dialog.dismiss();
-                showProcessedItemDialog(parsedData, itemInfo);
+                new Handler().postDelayed(() -> { // Add delay before reopening dialog
+                    showProcessedItemDialog(parsedData, itemInfo);
+                    isProcessing = false; // Reset flag after delay
+                }, 500); // 500ms delay
             });
 
         } catch (Exception e) {
             Log.e(TAG, "Error processing scanner input", e);
             runOnUiThread(() -> {
                 showAlertDialog("Hata", "İşlem sırasında hata oluştu: " + e.getMessage(), scannerInput);
+                isProcessing = false;
             });
         }
     }
@@ -884,8 +927,21 @@ public class ProductionScanActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Okutulan Ürünler");
 
+        // Create ScrollView container
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+
+        // Set maximum height for ScrollView (80% of screen height)
+        int maxHeight = (int) (getResources().getDisplayMetrics().heightPixels * 0.8);
+        scrollView.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                Math.min(maxHeight, ViewGroup.LayoutParams.WRAP_CONTENT)));
+
         LinearLayout layout = createScannedItemsLayout();
-        builder.setView(layout);
+        scrollView.addView(layout);
+        builder.setView(scrollView);
         builder.setPositiveButton("Kapat", null);
         builder.show();
     }
@@ -894,6 +950,13 @@ public class ProductionScanActivity extends AppCompatActivity {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(20, 20, 20, 20);
+
+        // Add items count header
+        TextView countHeader = new TextView(this);
+        countHeader.setText("Toplam Ürün: " + scannedItems.size());
+        countHeader.setTypeface(null, Typeface.BOLD);
+        countHeader.setPadding(0, 0, 0, 20);
+        layout.addView(countHeader);
 
         for (ScannedItem item : scannedItems) {
             addScannedItemView(layout, item);

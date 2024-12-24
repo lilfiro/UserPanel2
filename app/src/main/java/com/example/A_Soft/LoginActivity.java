@@ -15,7 +15,12 @@ import android.widget.TextView;
 
 import java.util.Calendar;
 
+import android.content.SharedPreferences;
+
 public class LoginActivity extends AppCompatActivity {
+
+    private static final String PREFS_NAME = "LoginPrefs";
+    private static final String LAST_LOGIN_DAY_KEY = "lastLoginDay"; // Store day instead of timestamp
 
     private EditText usernameEditText, passwordEditText;
     private Button loginButton, settingsButton;
@@ -39,6 +44,12 @@ public class LoginActivity extends AppCompatActivity {
 
         databaseHelper = new DatabaseHelper(this);
 
+        // Check if the user is already logged in
+        if (isUserLoggedIn()) {
+            navigateToHome();
+            return;
+        }
+
         // Set greeting based on time of day
         updateGreetingBasedOnTime();
 
@@ -53,11 +64,18 @@ public class LoginActivity extends AppCompatActivity {
                 databaseHelper.checkUser(username, password, new DatabaseHelper.OnUserCheckListener() {
                     @Override
                     public void onUserCheck(boolean userExists) {
+                        // In LoginActivity.java, inside the login success block
                         if (userExists) {
                             Toast.makeText(LoginActivity.this, "Giriş Başarılı", Toast.LENGTH_SHORT).show();
-                            Intent intent = new Intent(LoginActivity.this, HomeActivity.class);
-                            startActivity(intent);
-                            finish();
+
+                            // Save the logged in username
+                            SharedPreferences loginPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
+                            SharedPreferences.Editor editor = loginPrefs.edit();
+                            editor.putString("logged_in_username", username);
+                            editor.apply();
+
+                            saveLoginDay();
+                            navigateToHome();
                         } else {
                             Toast.makeText(LoginActivity.this, "Geçersiz Giriş", Toast.LENGTH_SHORT).show();
                         }
@@ -89,5 +107,32 @@ public class LoginActivity extends AppCompatActivity {
             imageView.setImageResource(R.drawable.good_night_img);
             textView.setText("Akşamlar");
         }
+    }
+
+    private boolean isUserLoggedIn() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        int lastLoginDay = prefs.getInt(LAST_LOGIN_DAY_KEY, -1); // Retrieve last login day
+        int currentDay = getCurrentDay();
+
+        // Check if the login day matches the current day
+        return lastLoginDay == currentDay;
+    }
+
+    private void saveLoginDay() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putInt(LAST_LOGIN_DAY_KEY, getCurrentDay()); // Save the current day
+        editor.apply();
+    }
+
+    private int getCurrentDay() {
+        Calendar calendar = Calendar.getInstance();
+        return calendar.get(Calendar.DAY_OF_YEAR); // Get the day of the year
+    }
+
+    private void navigateToHome() {
+        Intent intent = new Intent(LoginActivity.this, HomeActivity.class);
+        startActivity(intent);
+        finish();
     }
 }
