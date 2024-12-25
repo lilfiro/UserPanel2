@@ -9,6 +9,10 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.Editable;
@@ -62,6 +66,8 @@ public class ProductionScanActivity extends AppCompatActivity {
     private static final long SCAN_DEBOUNCE_INTERVAL = 2000;
     private static final String PREF_NAME = "ProductionDrafts";
     private static final String KEY_DRAFT_DATA = "draft_data";
+    private ConnectivityManager connectivityManager;
+    private ConnectivityManager.NetworkCallback networkCallback;
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault());
 
     static {
@@ -104,6 +110,7 @@ public class ProductionScanActivity extends AppCompatActivity {
         SharedPreferences loginPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
         currentOperator = loginPrefs.getString("logged_in_username", "");
         initializeBasicComponents();
+        setupNetworkCallback();
         loadDraftData();
         requestCameraPermissionIfNeeded();
 
@@ -114,8 +121,6 @@ public class ProductionScanActivity extends AppCompatActivity {
         isCameraActive = false;
         cameraStateButton.setImageResource(R.drawable.camera_off);
     }
-
-
     private void initializeBasicComponents() {
         sharedPreferences = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         currentReceiptNo = getIntent().getStringExtra("RECEIPT_NO");
@@ -133,7 +138,26 @@ public class ProductionScanActivity extends AppCompatActivity {
         loadInitialData();
         showScannerInputDialog();
     }
+    private void setupNetworkCallback() {
+        connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        networkCallback = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onLost(Network network) {
+                runOnUiThread(() -> showToast("İnternet bağlantısı kesildi"));
+            }
+        };
 
+        NetworkRequest request = new NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build();
+        connectivityManager.registerNetworkCallback(request, networkCallback);
+    }
+    private boolean isNetworkAvailable() {
+        NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(
+                connectivityManager.getActiveNetwork());
+        return capabilities != null &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+    }
     private void initializeButtons() {
         // Initialize buttons with correct types
         scanButton = (ImageButton) findViewById(R.id.scanButton);
@@ -234,6 +258,11 @@ public class ProductionScanActivity extends AppCompatActivity {
     }
 
     private void confirmProduction() {
+        if (!isNetworkAvailable()) {
+            showToast("İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");
+            return;
+        }
+
         if (scannedItems.isEmpty()) {
             showToast("Onaylanacak ürün bulunmamaktadır");
             return;
@@ -271,7 +300,6 @@ public class ProductionScanActivity extends AppCompatActivity {
             return;
         }
 
-        // Prevent processing if it's the same QR code within debounce interval
         if (qrCodeData.equals(lastScannedQR) &&
                 (System.currentTimeMillis() - lastScanTime) < SCAN_DEBOUNCE_INTERVAL) {
             return;
@@ -288,13 +316,16 @@ public class ProductionScanActivity extends AppCompatActivity {
                     return;
                 }
 
-                // Extract TEDAS code from KAREKODNO
+                if (isAlreadyScanned(parsedData.kareKodNo)) {
+                    runOnUiThread(() -> showToast("Bu ürün zaten tarandı"));
+                    return;
+                }
+
                 String kareKodNoTedas = "";
                 if (parsedData.kareKodNo.contains("ENT")) {
                     kareKodNoTedas = parsedData.kareKodNo.split("ENT")[0];
                 }
 
-                // Validate both TEDAS codes match with barcode
                 if (!validateTedasCode(kareKodNoTedas, parsedData.tedasKirilim, parsedData.barcode)) {
                     runOnUiThread(() -> showToast("TEDAŞ kodu ve barkod eşleşmesi bulunamadı"));
                     return;
@@ -306,7 +337,9 @@ public class ProductionScanActivity extends AppCompatActivity {
                     return;
                 }
 
-                processScannedItem(parsedData, itemInfo, "KAMERA");
+                runOnUiThread(() -> showProcessedItemDialog(parsedData, itemInfo, () ->
+                        processScannedItem(parsedData, itemInfo, "KAMERA")
+                ));
 
             } catch (Exception e) {
                 Log.e(TAG, "QR Code processing error", e);
@@ -658,14 +691,17 @@ public class ProductionScanActivity extends AppCompatActivity {
 
                 String malzeme = itemParts[0];
                 String tipi = itemParts[1];
-                String tedasPart = fullKareKodNo.split("ENT")[0];  // Extract TEDAS part
+                String tedasPart = fullKareKodNo.split("ENT")[0];
 
                 String formattedQR = formatManualQRCode(fullKareKodNo, tedasPart, malzeme, tipi, imalYili, barcode);
 
+                QRCodeData qrData = new QRCodeData(formattedQR, fullKareKodNo, tedasPart, barcode);
+
                 runOnUiThread(() -> {
                     dialog.dismiss();
-                    processScannedItem(new QRCodeData(formattedQR, fullKareKodNo, tedasPart, barcode),
-                            itemInfo, "MANUAL");
+                    showProcessedItemDialog(qrData, itemInfo, () ->
+                            processScannedItem(qrData, itemInfo, "MANUAL")
+                    );
                 });
 
             } catch (Exception e) {
@@ -826,16 +862,16 @@ public class ProductionScanActivity extends AppCompatActivity {
         return qrCode.matches("\\|\\|KAREKODNO_.*\\|TEDASKIRILIM_.*\\|MARKA_.*\\|MALZEME_.*\\|TIPI_.*\\|IMALYILI_.*\\|\\|.*");
     }
 
-    private void showProcessedItemDialog(QRCodeData data, String itemInfo) {
+    private void showProcessedItemDialog(QRCodeData data, String itemInfo, Runnable onConfirm) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("İşlenen Ürün Detayları");
         builder.setMessage(formatScannedItemText(data.rawData, DATE_FORMAT.format(new Date())));
         builder.setPositiveButton("Onayla", (dialog, which) -> {
-            new Handler().postDelayed(() -> { // Delay before reopening scanner
-                processScannedItem(data, itemInfo, "SCANNER");
-                showScannerInputDialog();
-            }, 500); // 500ms delay
+            new Handler().postDelayed(() -> {
+                onConfirm.run();
+            }, 500);
         });
+        builder.setNegativeButton("İptal", (dialog, which) -> dialog.dismiss());
         builder.show();
     }
     private void processScannerInput(String scannedData, AlertDialog dialog, EditText scannerInput) {
@@ -857,7 +893,8 @@ public class ProductionScanActivity extends AppCompatActivity {
                 return;
             }
 
-            String kareKodNoTedas = parsedData.kareKodNo.contains("ENT") ? parsedData.kareKodNo.split("ENT")[0] : "";
+            String kareKodNoTedas = parsedData.kareKodNo.contains("ENT") ?
+                    parsedData.kareKodNo.split("ENT")[0] : "";
 
             if (isAlreadyScanned(parsedData.kareKodNo)) {
                 runOnUiThread(() -> {
@@ -886,10 +923,13 @@ public class ProductionScanActivity extends AppCompatActivity {
 
             runOnUiThread(() -> {
                 dialog.dismiss();
-                new Handler().postDelayed(() -> { // Add delay before reopening dialog
-                    showProcessedItemDialog(parsedData, itemInfo);
-                    isProcessing = false; // Reset flag after delay
-                }, 500); // 500ms delay
+                new Handler().postDelayed(() -> {
+                    showProcessedItemDialog(parsedData, itemInfo, () -> {
+                        processScannedItem(parsedData, itemInfo, "SCANNER");
+                        showScannerInputDialog();
+                    });
+                    isProcessing = false;
+                }, 500);
             });
 
         } catch (Exception e) {
