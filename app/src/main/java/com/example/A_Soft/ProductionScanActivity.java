@@ -291,6 +291,11 @@ public class ProductionScanActivity extends AppCompatActivity {
     }
 
     private void processQRCode(String qrCodeData) {
+        if (!isNetworkAvailable()) {
+            runOnUiThread(() -> showToast("İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin."));
+            return;
+        }
+
         if (qrCodeData == null || qrCodeData.isEmpty()) {
             return;
         }
@@ -384,6 +389,11 @@ public class ProductionScanActivity extends AppCompatActivity {
     }
 
     private boolean isAlreadyScanned(String kareKodNo) {
+        if (!isNetworkAvailable()) {
+            showToast("İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");
+            return false;
+        }
+
         // First check if it's already in our current session
         if (scannedKareKodNos.contains(kareKodNo)) {
             return true;
@@ -401,8 +411,8 @@ public class ProductionScanActivity extends AppCompatActivity {
             }
         } catch (SQLException e) {
             Log.e(TAG, "Error checking if item is already scanned", e);
-            showToast("Duplicate check error: " + e.getMessage());
-            return true; // Err on the side of caution
+            showToast("Veritabanı kontrolü sırasında hata oluştu: " + e.getMessage());
+            return false;
         }
     }
 
@@ -754,7 +764,10 @@ public class ProductionScanActivity extends AppCompatActivity {
     private boolean validateTedasCode(String kareKodNoTedas, String tedasKirilim, String barcode) {
         Log.d(TAG, "Validating TEDAS: KareKodNo part = '" + kareKodNoTedas +
                 "', TedasKirilim = '" + tedasKirilim + "', Barcode = '" + barcode + "'");
-
+        if (!isNetworkAvailable()) {
+            showToast("İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");
+            return false;
+        }
         // First check if KAREKODNO TEDAS part matches TEDASKIRILIM
         if (!kareKodNoTedas.equals(tedasKirilim)) {
             Log.d(TAG, "TEDAS codes don't match between KAREKODNO and TEDASKIRILIM");
