@@ -5,7 +5,9 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.EditText;
@@ -77,7 +79,8 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     private long lastScanTime = 0;
     private static final long SCAN_DEBOUNCE_INTERVAL = 2000; // 2 seconds
 
-
+    private ImageButton cameraStateButton;
+    private boolean isCameraActive = false;
     private static final String PREF_NAME = "SevkiyatDrafts";
     private static final String KEY_DRAFT_DATA = "draft_data";
     private ImageButton saveAsDraftButton;
@@ -147,7 +150,19 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         saveAsDraftButton.setOnClickListener(v -> saveDraft());
         ImageButton scanButton = findViewById(R.id.scanButton);
         scanButton.setOnClickListener(v -> showScannerInputDialog());
+        cameraStateButton = findViewById(R.id.camera_state);
+        cameraStateButton.setOnClickListener(v -> toggleCamera());
 
+// Start with camera off
+        if (cameraPreview != null) {
+            cameraPreview.stopCamera();
+            cameraPreview.setVisibility(View.GONE);
+        }
+        isCameraActive = false;
+        cameraStateButton.setImageResource(R.drawable.camera_off);
+
+        // Show scanner dialog on start
+        showScannerInputDialog();
         // Style the table
         styleTableLayout();
 
@@ -173,72 +188,118 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             }
         });
     }
-    private void showScannerInputDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Barkod Okut");
+    private void toggleCamera() {
+        isCameraActive = !isCameraActive;
 
-        // Create layout for dialog
+        if (isCameraActive) {
+            setupBarcodeDetection();
+            cameraPreview.startCamera();
+            cameraPreview.setVisibility(View.VISIBLE);
+            findViewById(R.id.scan_area_indicator).setVisibility(View.VISIBLE);
+            cameraStateButton.setImageResource(R.drawable.camera_on);
+        } else {
+            cameraPreview.stopCamera();
+            cameraPreview.setVisibility(View.GONE);
+            findViewById(R.id.scan_area_indicator).setVisibility(View.GONE);
+            cameraStateButton.setImageResource(R.drawable.camera_off);
+        }
+    }
+    private void showScannerInputDialog() {
+        if (isCameraActive) {
+            toggleCamera();
+        }
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Barkod Tarayıcı");
+
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(20, 20, 20, 20);
 
-        // Create input field
-        final EditText scanInput = new EditText(this);
-        scanInput.setHint("Barkod");
-        scanInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        layout.addView(scanInput);
+        EditText scannerInput = new EditText(this);
+        scannerInput.setHint("Barkod tarayıcı bekleniyor...");
+        scannerInput.requestFocus();
+        layout.addView(scannerInput);
 
         builder.setView(layout);
-
-        // Set up the buttons
-        builder.setPositiveButton("Onayla", null); // We'll override this below
+        builder.setPositiveButton("Onayla", null);
         builder.setNegativeButton("İptal", (dialog, which) -> dialog.dismiss());
 
         AlertDialog dialog = builder.create();
 
-        // Override the positive button to handle validation
+        scannerInput.addTextChangedListener(new TextWatcher() {
+            private boolean isProcessing = false;
+
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (isProcessing) return;
+                isProcessing = true;
+
+                String scannedData = s.toString().trim();
+                if (isValidQRFormat(scannedData)) {
+                    executorService.submit(() -> {
+                        ReceiptItemManager.ScanResult result = itemManager.cacheScannedItem(scannedData);
+                        runOnUiThread(() -> {
+                            dialog.dismiss();
+                            handleScanResult(result, scannedData);
+                            isProcessing = false;
+                        });
+                    });
+                } else {
+                    isProcessing = false;
+                }
+            }
+        });
+
         dialog.setOnShowListener(dialogInterface -> {
-            Button button = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-            button.setOnClickListener(view -> {
-                String scannedData = scanInput.getText().toString().trim();
-
-                if (scannedData.isEmpty()) {
-                    showAlert("Uyarı", "Lütfen barkod okutunuz");
-                    return;
-                }
-
-                // Extract the KAREKODNO from the scanned format
-                Pattern pattern = Pattern.compile("KAREKODNO_([^|]+)");
-                Matcher matcher = pattern.matcher(scannedData);
-
-                if (!matcher.find()) {
-                    showAlert("Hata", "Geçersiz barkod formatı");
-                    return;
-                }
-
-                String karekodno = matcher.group(1);
-
-                // Extract the item code (last part after ||)
-                String[] parts = scannedData.split("\\|\\|");
-                if (parts.length < 2) {
-                    showAlert("Hata", "Geçersiz barkod formatı");
-                    return;
-                }
-
-                String itemCode = parts[parts.length - 1].trim();
-
-                // Format the data in the expected QR format
-                String formattedData = String.format("KAREKODNO_%s||%s", karekodno, itemCode);
-
-                dialog.dismiss();
-                processQRCode(formattedData);
-            });
+            scannerInput.requestFocus();
+            Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+            positiveButton.setVisibility(View.GONE);
+            negativeButton.setVisibility(View.GONE);
         });
 
         dialog.show();
+    }
 
-        // Set focus to the input field and show keyboard
-        scanInput.requestFocus();
+    private boolean isValidQRFormat(String qrCode) {
+        return qrCode != null && qrCode.contains("KAREKODNO_") && qrCode.contains("||");
+    }
+
+    private void handleScanResult(ReceiptItemManager.ScanResult result, String scannedData) {
+        switch (result) {
+            case SUCCESS:
+                showToast("Ürün Okutuldu");
+                updateScanStatus();
+                showScannerInputDialog();
+                break;
+            case ALREADY_SCANNED:
+                showAlert("Uyarı", "Bu ürün zaten tarandı", () -> showScannerInputDialog());
+                break;
+            case ITEM_NOT_IN_RECEIPT:
+                showAlert("Hata", "Bu ürün sevkiyat planında yok", () -> showScannerInputDialog());
+                break;
+            case COMPLETE_ITEM:
+                showAlert("Uyarı", "Bu ürünün okutulması tamamlanmıştır", () -> showScannerInputDialog());
+                break;
+        }
+    }
+
+    private void showAlert(String title, String message, Runnable onDismiss) {
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton("Tamam", (dialog, which) -> {
+                    dialog.dismiss();
+                    if (onDismiss != null) onDismiss.run();
+                })
+                .show();
     }
     private void saveDraft() {
         DraftData draftData = new DraftData(
@@ -323,7 +384,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
 
         // Create KAREKODNO input
         final EditText karekodInput = new EditText(this);
-        karekodInput.setHint("Stok Kodu");
+        karekodInput.setHint("Karekod No");
         layout.addView(karekodInput);
 
         // Add some spacing
@@ -335,7 +396,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
 
         // Create Barcode input
         final EditText barcodeInput = new EditText(this);
-        barcodeInput.setHint("Seri Kodu");
+        barcodeInput.setHint("Ürün Kodu");
         layout.addView(barcodeInput);
 
         builder.setView(layout);
@@ -661,10 +722,12 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             // Add dynamic rows for each item
             for (DraftReceipt detail : details) {
                 TableRow row = new TableRow(SevkiyatQR_ScreenActivity.this);
+                String materialName = detail.getMaterialName();
 
-                TextView materialView = createTextView(detail.getMaterialName());
+                TextView materialView = createTextView(materialName);
                 TextView amountView = createTextView(detail.getAmount());
-                TextView scannedView = createTextView("0");
+                // Get actual scanned count from itemManager
+                TextView scannedView = createTextView(String.valueOf(itemManager.getScannedCountForItem(materialName)));
 
                 styleDataCell(materialView);
                 styleDataCell(amountView);
@@ -676,6 +739,9 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
 
                 tableLayout.addView(row);
             }
+
+            // Update scan status after table is populated
+            updateScanStatus();
         }
 
         private TextView createTextView(String text) {

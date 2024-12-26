@@ -1295,6 +1295,26 @@ public class ProductionScanActivity extends AppCompatActivity {
     }
 
     @Override
+    public void onBackPressed() {
+        if (!scannedItems.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Taslak Kaydet")
+                    .setMessage("Okutulmuş ürünler var, taslak olarak kaydedilsin mi?")
+                    .setPositiveButton("Evet", (dialog, which) -> {
+                        saveDraft();
+                        super.onBackPressed();
+                    })
+                    .setNegativeButton("Hayır", (dialog, which) -> {
+                        super.onBackPressed();
+                    })
+                    .setCancelable(true)
+                    .show();
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         if (executorService != null && !executorService.isShutdown()) {
