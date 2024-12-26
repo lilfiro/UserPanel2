@@ -879,13 +879,16 @@ public class ProductionScanActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("İşlenen Ürün Detayları");
         builder.setMessage(formatScannedItemText(data.rawData, DATE_FORMAT.format(new Date())));
+        builder.setCancelable(false); // Prevent dialog from being canceled on outside touch
         builder.setPositiveButton("Onayla", (dialog, which) -> {
             new Handler().postDelayed(() -> {
                 onConfirm.run();
             }, 500);
         });
         builder.setNegativeButton("İptal", (dialog, which) -> dialog.dismiss());
-        builder.show();
+        AlertDialog dialog = builder.create();
+        dialog.setCanceledOnTouchOutside(false); // Prevent cancellation when touching outside
+        dialog.show();
     }
     private void processScannerInput(String scannedData, AlertDialog dialog, EditText scannerInput) {
         try {
@@ -957,12 +960,15 @@ public class ProductionScanActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(title);
         builder.setMessage(message);
+        builder.setCancelable(false); // Prevent dialog from being canceled on outside touch
         builder.setPositiveButton("Tamam", (dialog, which) -> {
             clearAndRefocusInput(scannerInput);
             dialog.dismiss();
         });
         builder.setOnDismissListener(dialog -> clearAndRefocusInput(scannerInput));
-        builder.show();
+        AlertDialog dialog = builder.create();
+        dialog.setCanceledOnTouchOutside(false); // Prevent cancellation when touching outside
+        dialog.show();
     }
 
     private void clearAndRefocusInput(EditText scannerInput) {
