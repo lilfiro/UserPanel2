@@ -49,6 +49,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -562,8 +563,26 @@ public class ProductionScanActivity extends AppCompatActivity {
 
     private void batchInsertProductionItems(Connection conn, long slipId) throws SQLException {
         String insertItemsQuery = "INSERT INTO AST_PRODUCTION_ITEMS " +
-                "(SLIPID, KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, QUANTITY) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)";
+                "(SLIPID, KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, QUANTITY, ITMID) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)";
+
+        // First, let's get all the item IDs we need in one query for better performance
+        Map<String, Long> barcodeToItemId = new HashMap<>();
+        try (PreparedStatement idStmt = conn.prepareStatement(
+                "SELECT ID, CODE FROM AST_ITEMS WHERE CODE IN (" +
+                        String.join(",", Collections.nCopies(scannedItems.size(), "?")) + ")")) {
+
+            int paramIndex = 1;
+            for (ScannedItem item : scannedItems) {
+                idStmt.setString(paramIndex++, extractBarcode(item.kareKodNo));
+            }
+
+            try (ResultSet rs = idStmt.executeQuery()) {
+                while (rs.next()) {
+                    barcodeToItemId.put(rs.getString("CODE"), rs.getLong("ID"));
+                }
+            }
+        }
 
         try (PreparedStatement itemsStmt = conn.prepareStatement(insertItemsQuery)) {
             for (ScannedItem item : scannedItems) {
@@ -575,19 +594,28 @@ public class ProductionScanActivity extends AppCompatActivity {
 
                 String kareKodNoForItems = extractKareKodNoAfterENT(fullKareKodNo);
                 String tedasKirilim = extractTedasKirilimBeforeENT(fullKareKodNo);
+                String barcode = extractBarcode(qrCode);
+
+                // Get the item ID for this barcode
+                Long itemId = barcodeToItemId.get(barcode);
+                if (itemId == null) {
+                    throw new SQLException("Could not find item ID for barcode: " + barcode);
+                }
 
                 Log.d(TAG, "Adding to batch - SLIPID: " + slipId +
                         ", KAREKODNO: " + kareKodNoForItems +
-                        ", TEDAS: " + tedasKirilim);
+                        ", TEDAS: " + tedasKirilim +
+                        ", ITMID: " + itemId);
 
                 itemsStmt.setLong(1, slipId);
                 itemsStmt.setString(2, kareKodNoForItems);
                 itemsStmt.setString(3, tedasKirilim);
                 itemsStmt.setString(4, extractPattern(qrCode, "MARKA"));
-                itemsStmt.setString(5, extractPattern(qrCode, "MALZEME"));
+                itemsStmt.setString(5, barcode);
                 itemsStmt.setString(6, extractPattern(qrCode, "TIPI"));
                 itemsStmt.setString(7, extractPattern(qrCode, "IMALYILI"));
-                itemsStmt.setString(8, extractBarcode(qrCode));
+                itemsStmt.setString(8, barcode);
+                itemsStmt.setLong(9, itemId);
 
                 itemsStmt.addBatch();
             }
