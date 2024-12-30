@@ -125,6 +125,7 @@ public class ProductionScanActivity extends AppCompatActivity {
         sharedPreferences = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         currentReceiptNo = getIntent().getStringExtra("RECEIPT_NO");
         databaseHelper = new DatabaseHelper(this);
+        receiptManager = new ProductionReceiptManager(this); // Initialize receipt manager
 
         tableLayout = findViewById(R.id.tableLayout);
         cameraPreview = findViewById(R.id.camera_preview);
@@ -276,9 +277,18 @@ public class ProductionScanActivity extends AppCompatActivity {
                         try {
                             saveToProductionScanned();
                             runOnUiThread(() -> {
-                                showToast("Üretim onaylandı");
-                                clearDraft(); // Clear the draft data
-                                finish();     // Close the activity
+                                try {
+                                    // Update receipt status before deleting
+                                    receiptManager.updateReceiptStatus(currentReceiptNo, "TAMAMLANDI");
+                                    // Delete the receipt
+                                    receiptManager.deleteReceipt(currentReceiptNo);
+                                    showToast("Üretim onaylandı");
+                                    clearDraft();
+                                    finish();
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Error updating/deleting receipt", e);
+                                    showToast("Fiş silme hatası: " + e.getMessage());
+                                }
                             });
                         } catch (SQLException e) {
                             Log.e(TAG, "Error saving production", e);
@@ -388,23 +398,35 @@ public class ProductionScanActivity extends AppCompatActivity {
         });
     }
 
+
     private boolean isAlreadyScanned(String kareKodNo) {
         if (!isNetworkAvailable()) {
             showToast("İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");
             return false;
         }
 
-        // First check if it's already in our current session
-        if (scannedKareKodNos.contains(kareKodNo)) {
-            return true;
+        String codeAfterENT = "";
+        if (kareKodNo.contains("ENT")) {
+            codeAfterENT = kareKodNo.substring(kareKodNo.indexOf("ENT") + 3);
         }
 
-        // Then check the database
+        // First check current session
+        for (String scanned : scannedKareKodNos) {
+            if (scanned.contains("ENT")) {
+                String existingCode = scanned.substring(scanned.indexOf("ENT") + 3);
+                if (existingCode.equals(codeAfterENT)) {
+                    return true;
+                }
+            }
+        }
+
+        // Then check database
         try (Connection conn = databaseHelper.getAnatoliaSoftConnection();
              PreparedStatement stmt = conn.prepareStatement(
-                     "SELECT COUNT(*) FROM AST_PRODUCTION_SCANNED WHERE KAREKODNO = ?")) {
+                     "SELECT COUNT(*) FROM AST_PRODUCTION_SCANNED WHERE " +
+                             "SUBSTRING(KAREKODNO, CHARINDEX('ENT', KAREKODNO) + 3, LEN(KAREKODNO)) = ?")) {
 
-            stmt.setString(1, kareKodNo);
+            stmt.setString(1, codeAfterENT);
             try (ResultSet rs = stmt.executeQuery()) {
                 rs.next();
                 return rs.getInt(1) > 0;
@@ -478,83 +500,116 @@ public class ProductionScanActivity extends AppCompatActivity {
         try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
             conn.setAutoCommit(false);
             try {
-                batchInsertProductionItems(conn);
-                batchInsertProductionScanned(conn);
+                long slipId = insertProductionSlip(conn);
+                batchInsertProductionItems(conn, slipId);
+                batchInsertProductionScanned(conn, slipId);
+
+                Log.d(TAG, "Attempting to commit transaction...");
                 conn.commit();
+                Log.d(TAG, "Transaction committed successfully");
+
+                // Verify data was inserted
+                verifyDataInserted(conn, slipId);
+
             } catch (SQLException e) {
+                Log.e(TAG, "Error occurred, rolling back", e);
                 conn.rollback();
                 throw e;
-            } finally {
-                conn.setAutoCommit(true);
             }
         }
     }
 
-    private void batchInsertProductionItems(Connection conn) throws SQLException {
-        // First, get all existing full KAREKODNOs (including the ENT part)
-        Set<String> existingCodes = new HashSet<>();
+    private void verifyDataInserted(Connection conn, long slipId) throws SQLException {
         try (PreparedStatement stmt = conn.prepareStatement(
-                "SELECT TEDASKIRILIM + 'ENT' + KAREKODNO as FULL_KAREKODNO FROM AST_PRODUCTION_ITEMS")) {
+                "SELECT COUNT(*) FROM AST_PRODUCTION_SLIPS WHERE ID = ?")) {
+            stmt.setLong(1, slipId);
             try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    existingCodes.add(rs.getString("FULL_KAREKODNO"));
-                }
+                rs.next();
+                Log.d(TAG, "Verified slips count: " + rs.getInt(1));
             }
         }
 
+        try (PreparedStatement stmt = conn.prepareStatement(
+                "SELECT COUNT(*) FROM AST_PRODUCTION_ITEMS WHERE SLIPID = ?")) {
+            stmt.setLong(1, slipId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                rs.next();
+                Log.d(TAG, "Verified items count: " + rs.getInt(1));
+            }
+        }
+    }
+    private long insertProductionSlip(Connection conn) throws SQLException {
+        Log.d(TAG, "Inserting slip with receipt number: " + currentReceiptNo);
+
+        String insertSlipQuery = "INSERT INTO AST_PRODUCTION_SLIPS (STATUS, SLIPDATE, SLIPNR, CREATE_DATE, CREATEDUSER, SLIPTYPE) " +
+                "OUTPUT INSERTED.ID VALUES (?, GETDATE(), ?, GETDATE(), ?, 2)";
+
+        try (PreparedStatement stmt = conn.prepareStatement(insertSlipQuery)) {
+            stmt.setInt(1, 1);  // Status
+            stmt.setString(2, currentReceiptNo);  // SLIPNR
+            stmt.setString(3, currentOperator);   // Operator
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    long id = rs.getLong("ID");
+                    Log.d(TAG, "Created slip record with ID: " + id + " for receipt: " + currentReceiptNo);
+                    return id;
+                }
+                throw new SQLException("Failed to get slip ID");
+            }
+        }
+    }
+
+    private void batchInsertProductionItems(Connection conn, long slipId) throws SQLException {
         String insertItemsQuery = "INSERT INTO AST_PRODUCTION_ITEMS " +
-                "(KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, CREATE_DATE, STATUS, OPERATOR) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";  // Added OPERATOR parameter
+                "(SLIPID, KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, QUANTITY) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)";
 
         try (PreparedStatement itemsStmt = conn.prepareStatement(insertItemsQuery)) {
             for (ScannedItem item : scannedItems) {
                 String qrCode = item.kareKodNo;
                 String fullKareKodNo = extractPattern(qrCode, "KAREKODNO");
-
                 if (fullKareKodNo.isEmpty()) {
                     fullKareKodNo = extractPattern(qrCode, "TEDASKIRILIM");
-                }
-
-                // Skip if this full KAREKODNO (including ENT part) already exists in the database
-                if (existingCodes.contains(fullKareKodNo)) {
-                    Log.d(TAG, "Skipping existing item: " + fullKareKodNo);
-                    continue;
                 }
 
                 String kareKodNoForItems = extractKareKodNoAfterENT(fullKareKodNo);
                 String tedasKirilim = extractTedasKirilimBeforeENT(fullKareKodNo);
 
-                itemsStmt.setString(1, kareKodNoForItems);
-                itemsStmt.setString(2, tedasKirilim);
-                itemsStmt.setString(3, extractPattern(qrCode, "MARKA"));
-                itemsStmt.setString(4, extractPattern(qrCode, "MALZEME"));
-                itemsStmt.setString(5, extractPattern(qrCode, "TIPI"));
-                itemsStmt.setString(6, extractPattern(qrCode, "IMALYILI"));
-                itemsStmt.setString(7, extractBarcode(qrCode));
-                itemsStmt.setTimestamp(8, convertToSqlTimestamp(item.timestamp));
-                itemsStmt.setString(9, item.entryMethod);
-                itemsStmt.setString(10, currentOperator);  // Add operator information
+                Log.d(TAG, "Adding to batch - SLIPID: " + slipId +
+                        ", KAREKODNO: " + kareKodNoForItems +
+                        ", TEDAS: " + tedasKirilim);
+
+                itemsStmt.setLong(1, slipId);
+                itemsStmt.setString(2, kareKodNoForItems);
+                itemsStmt.setString(3, tedasKirilim);
+                itemsStmt.setString(4, extractPattern(qrCode, "MARKA"));
+                itemsStmt.setString(5, extractPattern(qrCode, "MALZEME"));
+                itemsStmt.setString(6, extractPattern(qrCode, "TIPI"));
+                itemsStmt.setString(7, extractPattern(qrCode, "IMALYILI"));
+                itemsStmt.setString(8, extractBarcode(qrCode));
 
                 itemsStmt.addBatch();
             }
 
-            executeBatchWithValidation(itemsStmt, "AST_PRODUCTION_ITEMS");
+            int[] results = itemsStmt.executeBatch();
+            Log.d(TAG, "Batch execution results: " + java.util.Arrays.toString(results));
         }
     }
-    private void batchInsertProductionScanned(Connection conn) throws SQLException {
-        // First, get all existing KAREKODNOs
+    private void batchInsertProductionScanned(Connection conn, long slipId) throws SQLException {
         Set<String> existingCodes = new HashSet<>();
         try (PreparedStatement stmt = conn.prepareStatement(
-                "SELECT KAREKODNO FROM AST_PRODUCTION_SCANNED")) {
+                "SELECT SUBSTRING(KAREKODNO, CHARINDEX('ENT', KAREKODNO) + 3, LEN(KAREKODNO)) as code " +
+                        "FROM AST_PRODUCTION_SCANNED")) {
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    existingCodes.add(rs.getString("KAREKODNO"));
+                    existingCodes.add(rs.getString("code"));
                 }
             }
         }
 
         String insertScannedQuery = "INSERT INTO AST_PRODUCTION_SCANNED " +
-                "(KAREKODNO, MATERIAL_NAME, SCAN_DATE) VALUES (?, ?, ?)";  // Added OPERATOR
+                "(SLIPID, KAREKODNO, MATERIAL_NAME) VALUES (?, ?, ?)";
 
         try (PreparedStatement scannedStmt = conn.prepareStatement(insertScannedQuery)) {
             for (ScannedItem item : scannedItems) {
@@ -563,32 +618,51 @@ public class ProductionScanActivity extends AppCompatActivity {
                     fullKareKodNo = extractPattern(item.kareKodNo, "TEDASKIRILIM");
                 }
 
-                // Log the KAREKODNO being inserted
-                Log.d(TAG, "Inserting Scanned Item: KAREKODNO=" + fullKareKodNo);
-
-                // Skip if this item already exists
-                if (existingCodes.contains(fullKareKodNo)) {
-                    continue;
+                // Extract part after ENT
+                String codeAfterENT = "";
+                if (fullKareKodNo.contains("ENT")) {
+                    codeAfterENT = fullKareKodNo.substring(fullKareKodNo.indexOf("ENT") + 3);
+                    if (existingCodes.contains(codeAfterENT)) {
+                        continue;
+                    }
                 }
 
-                scannedStmt.setString(1, fullKareKodNo);
-                scannedStmt.setString(2, item.materialName);
-                scannedStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
+                scannedStmt.setLong(1, slipId);
+                scannedStmt.setString(2, fullKareKodNo);
+
+                // Get correct material name from database
+                String correctMaterialName = getCorrectMaterialName(conn, extractPattern(item.kareKodNo, "TEDASKIRILIM"), extractBarcode(item.kareKodNo));
+                scannedStmt.setString(3, correctMaterialName != null ? correctMaterialName : item.materialName);
 
                 scannedStmt.addBatch();
             }
 
-            try {
-                int[] results = scannedStmt.executeBatch();
-                // Log the results
-                for (int i = 0; i < results.length; i++) {
-                    Log.d(TAG, "Batch result " + i + ": " + results[i]);
+            executeBatchWithValidation(scannedStmt, "AST_PRODUCTION_SCANNED");
+        }
+    }
+    ProductionReceiptManager receiptManager;
+    private void updateReceiptStatus(String receiptNo) {
+
+        receiptManager.updateReceiptStatus(receiptNo, "TAMAMLANDI");
+    }
+
+    private String getCorrectMaterialName(Connection conn, String tedasKirilim, String barcode) throws SQLException {
+        String query = "SELECT i.GROUPCODE + ' ' + i.DESCRIPTION as MATERIAL_NAME " +
+                "FROM AST_ITEMS i " +
+                "JOIN AST_TEMS_TEDAS t ON i.CODE = t.ITM_CODE " +
+                "WHERE t.ITM_TEDAS = ? AND i.CODE = ?";
+
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.setString(1, tedasKirilim);
+            stmt.setString(2, barcode);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("MATERIAL_NAME");
                 }
-            } catch (SQLException e) {
-                Log.e(TAG, "Error executing batch insert: " + e.getMessage(), e);
-                throw e;
             }
         }
+        return null;
     }
     private void executeBatchWithValidation(PreparedStatement stmt, String tableName) throws SQLException {
         int[] results = stmt.executeBatch();
