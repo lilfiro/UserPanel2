@@ -7,6 +7,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
@@ -340,37 +341,74 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     }
 
     private void styleTableLayout() {
-        // Set table background and border
+        // Set table properties
         tableLayout.setBackgroundResource(android.R.color.white);
         tableLayout.setPadding(2, 2, 2, 2);
         tableLayout.setBackgroundColor(getResources().getColor(android.R.color.darker_gray));
-
-        // Style header row
-        TableRow headerRow = (TableRow) tableLayout.getChildAt(0);
-        if (headerRow != null) {
-            for (int i = 0; i < headerRow.getChildCount(); i++) {
-                TextView headerCell = (TextView) headerRow.getChildAt(i);
-                styleHeaderCell(headerCell);
-            }
-        }
+        tableLayout.setStretchAllColumns(true);
+        tableLayout.setShrinkAllColumns(true);
     }
+
     private void styleHeaderCell(TextView cell) {
+        // Set layout parameters for full width and height
+        TableRow.LayoutParams params = new TableRow.LayoutParams(
+                TableRow.LayoutParams.MATCH_PARENT,
+                TableRow.LayoutParams.MATCH_PARENT,
+                1.0f
+        );
+        params.setMargins(1, 1, 1, 1);
+        cell.setLayoutParams(params);
+
+        // Style the cell
         cell.setBackgroundColor(getResources().getColor(android.R.color.holo_blue_dark));
         cell.setTextColor(getResources().getColor(android.R.color.white));
-        cell.setPadding(16, 16, 16, 16);
+        cell.setPadding(8, 16, 8, 16);
         cell.setTypeface(null, Typeface.BOLD);
+        cell.setGravity(Gravity.CENTER);
+        cell.setMaxLines(2);
+        cell.setEllipsize(TextUtils.TruncateAt.END);
     }
 
     private void styleDataCell(TextView cell) {
-        cell.setBackgroundColor(getResources().getColor(android.R.color.white));
-        cell.setPadding(16, 12, 16, 12);
-        cell.setTextColor(getResources().getColor(android.R.color.black));
+        // Set layout parameters for full width and height
+        TableRow.LayoutParams params = new TableRow.LayoutParams(
+                TableRow.LayoutParams.MATCH_PARENT,
+                TableRow.LayoutParams.MATCH_PARENT,
+                1.0f
+        );
+        params.setMargins(1, 1, 1, 1);
+        cell.setLayoutParams(params);
 
-        // Add border
+        // Style the cell
+        cell.setBackgroundColor(getResources().getColor(android.R.color.white));
+        cell.setPadding(8, 12, 8, 12);
+        cell.setTextColor(getResources().getColor(android.R.color.black));
+        cell.setGravity(Gravity.CENTER);
+        cell.setMaxLines(2);
+        cell.setEllipsize(TextUtils.TruncateAt.END);
+
+        // Add border with full coverage
         GradientDrawable border = new GradientDrawable();
         border.setColor(getResources().getColor(android.R.color.white));
         border.setStroke(1, getResources().getColor(android.R.color.darker_gray));
         cell.setBackground(border);
+    }
+
+    private TextView createTextView(String text) {
+        TextView textView = new TextView(this);
+        textView.setText(text);
+        textView.setGravity(Gravity.CENTER);
+
+        // Set layout parameters for full width and height
+        TableRow.LayoutParams params = new TableRow.LayoutParams(
+                TableRow.LayoutParams.MATCH_PARENT,
+                TableRow.LayoutParams.MATCH_PARENT,
+                1.0f
+        );
+        params.setMargins(1, 1, 1, 1);
+        textView.setLayoutParams(params);
+
+        return textView;
     }
 
     // Update the manual QR input validation
@@ -462,7 +500,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
     // Add an overloaded version of showAlert that can finish the activity
-// Base method with 2 parameters (default version)
+    // Base method with 2 parameters (default version)
     private void showAlert(String title, String message) {
         showAlert(title, message, false); // Default to not finishing the activity
     }
@@ -486,7 +524,6 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
 
     private void processQRCode(String qrCodeData) {
         long currentTime = System.currentTimeMillis();
-
         if (currentTime - lastScanTime < SCAN_DEBOUNCE_INTERVAL) {
             return;
         }
@@ -500,11 +537,13 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             lastScanTime = currentTime;
 
             executorService.submit(() -> {
+                // Log the QR code being processed
+                Log.d(TAG, "Processing QR code: " + qrCodeData);
+
                 ReceiptItemManager.ScanResult result = itemManager.cacheScannedItem(qrCodeData);
                 runOnUiThread(() -> {
                     switch (result) {
                         case SUCCESS:
-                            String itemCode = itemManager.extractItemCodeFromQR(qrCodeData);
                             showToast("Ürün Okutuldu");
                             break;
                         case ALREADY_SCANNED:
@@ -525,82 +564,47 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             showAlert("Hata", "Karekod okunurken hata oluştu: " + e.getMessage());
         }
     }
-
-    private void showItemConfirmationDialog(String qrCode) {
-        // Parse the QR code to extract all needed information
-        String karekodno = "";
-        String malzeme = "";
-        String tipi = "";
-
-        // Extract KAREKODNO
-        Pattern kareKodPattern = Pattern.compile("KAREKODNO_([^|]+)");
-        Matcher kareKodMatcher = kareKodPattern.matcher(qrCode);
-        if (kareKodMatcher.find()) {
-            karekodno = kareKodMatcher.group(1);
-        }
-
-        // Extract MALZEME
-        Pattern malzemePattern = Pattern.compile("MALZEME_([^|]+)");
-        Matcher malzemeMatcher = malzemePattern.matcher(qrCode);
-        if (malzemeMatcher.find()) {
-            malzeme = malzemeMatcher.group(1);
-        }
-
-        // Extract TIPI
-        Pattern tipiPattern = Pattern.compile("TIPI_([^|]+)");
-        Matcher tipiMatcher = tipiPattern.matcher(qrCode);
-        if (tipiMatcher.find()) {
-            tipi = tipiMatcher.group(1);
-        }
-
-        // Build the message with the extracted information
-        String message = String.format("KAREKODNO: %s\nMALZEME: %s\nTİPİ: %s",
-                karekodno,
-                malzeme,
-                tipi);
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Ürün Onayı")
-                .setMessage(message)
-                .setPositiveButton("Tamam", (dialog, which) -> {
-                    updateScanStatus();
-                    confirmReceiptButton.setEnabled(itemManager.areAllItemsScanned());
-                })
-                .setCancelable(false)
-                .show();
-    }
-
     private void updateScanStatus() {
         runOnUiThread(() -> {
+            // Debug log the current state
+            Log.d(TAG, "Updating scan status");
+            int scannedCount = itemManager.getScannedCount();
+            int totalItems = itemManager.getTotalItems();
+            Log.d(TAG, String.format("Counts - Scanned: %d, Total: %d", scannedCount, totalItems));
+
             // Update header or summary information
             String status = String.format("Okutulacak malzemeler: %d/%d",
-                    itemManager.getScannedCount(),
-                    itemManager.getTotalItems());
+                    scannedCount, totalItems);
             scanStatusTextView.setText(status);
 
             // Update table rows dynamically
-            for (int i = 1; i < tableLayout.getChildCount(); i++) { // Skip header row
+            for (int i = 1; i < tableLayout.getChildCount(); i++) {
                 TableRow row = (TableRow) tableLayout.getChildAt(i);
-
-                TextView materialNameView = (TextView) row.getChildAt(0); // First column
-                TextView scannedQuantityView = (TextView) row.getChildAt(2); // Third column
+                TextView materialNameView = (TextView) row.getChildAt(0);
+                TextView scannedQuantityView = (TextView) row.getChildAt(2);
 
                 String materialName = materialNameView.getText().toString();
-                int scannedCount = itemManager.getScannedCountForItem(materialName);
+                int scannedItemCount = itemManager.getScannedCountForItem(materialName);
+                Log.d(TAG, String.format("Row update - Material: %s, Count: %d",
+                        materialName, scannedItemCount));
 
-                scannedQuantityView.setText(String.valueOf(scannedCount));
+                scannedQuantityView.setText(String.valueOf(scannedItemCount));
             }
 
-            // Enable/disable confirm button
-            confirmReceiptButton.setEnabled(itemManager.areAllItemsScanned());
+            // Enable/disable confirm button based on scanning status
+            boolean allItemsScanned = itemManager.areAllItemsScanned();
+            Log.d(TAG, "All items scanned: " + allItemsScanned);
+            confirmReceiptButton.setEnabled(allItemsScanned);
+            confirmReceiptButton.setAlpha(allItemsScanned ? 1.0f : 0.5f);
         });
     }
-
 
     private void loadReceiptItems() {
         executorService.submit(() -> {
             itemManager.loadReceiptItems();
 
+            itemManager.logItemState();
+            itemManager.printItemCounts();
             // Load draft data after receipt items are loaded
             runOnUiThread(() -> {
                 loadDraftData();
@@ -644,57 +648,55 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         public FetchItemsTask(DatabaseHelper databaseHelper) {
             this.databaseHelper = databaseHelper;
         }
-
         @Override
         protected List<DraftReceipt> doInBackground(String... params) {
             List<DraftReceipt> detailsList = new ArrayList<>();
-            String ficheNo = params[0]; // Received FICHENO
+            String slipNr = params[0];
 
-            // Prepare ficheNo for SQL IN clause
-            String[] ficheNos = ficheNo.split("/");
-            StringBuilder formattedFicheNo = new StringBuilder();
-            for (String fiche : ficheNos) {
-                if (formattedFicheNo.length() > 0) {
-                    formattedFicheNo.append("','");
-                }
-                formattedFicheNo.append(fiche.trim());
-            }
-            ficheNo = "'" + formattedFicheNo.toString() + "'";
-
-            try (Connection connection = databaseHelper.getTigerConnection()) {
-                // Use dynamic table names from DatabaseHelper
-                String tigerStFicheTable = databaseHelper.getTigerDbTableName("STFICHE");
-                String tigerStLineTable = databaseHelper.getTigerDbTableName("STLINE");
+            try (Connection connection = databaseHelper.getAnatoliaSoftConnection()) {
+                String anatoliaSoftShipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
+                String anatoliaSoftShipPlanLineTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLANLINE");
                 String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
+                String astItemsTable = databaseHelper.getAnatoliaSoftTableName("AST_ITEMS");
 
                 String query = String.format(
-                        "SELECT " +
-                                "IT.NAME AS [Malzeme Adı], " +
-                                "STRING_AGG(CAST(SL.AMOUNT AS VARCHAR), ', ') AS [Miktar] " +
-                                "FROM %s ST " +
-                                "INNER JOIN %s SL ON SL.STFICHEREF = ST.LOGICALREF " +
-                                "INNER JOIN %s IT ON IT.LOGICALREF = SL.STOCKREF " +
-                                "WHERE ST.TRCODE = 8 " +
-                                "AND ST.BILLED = 0 " +
-                                "AND ST.FICHENO IN (%s) " +
-                                "GROUP BY IT.NAME",
-                        tigerStFicheTable,
-                        tigerStLineTable,
+                        "WITH FilteredItems AS (" +
+                                "    SELECT " +
+                                "        IT.NAME AS ItemName, " +
+                                "        SHPL.QUANTITY AS ItemQuantity " +
+                                "    FROM %s SHP " +
+                                "    INNER JOIN %s SHPL ON SHP.ID = SHPL.SHIPPLANID " +
+                                "    INNER JOIN %s IT ON IT.LOGICALREF = SHPL.ERPITEMID " +
+                                "    LEFT JOIN %s AST_IT ON AST_IT.CODE = IT.CODE " +
+                                "    WHERE SHP.SLIPNR = ? " +
+                                "    AND SHP.STATUS = 0 " +
+                                "    AND IT.STGRPCODE <> 'TRAVERS' " +
+                                "    AND (AST_IT.GROUPCODE2 IS NULL OR AST_IT.GROUPCODE2 <> 'DIREKDEM') " +
+                                ")" +
+                                "SELECT " +
+                                "    ItemName AS [Malzeme Adı], " +
+                                "    CAST(SUM(ItemQuantity) AS VARCHAR) AS [Miktar] " +
+                                "FROM FilteredItems " +
+                                "GROUP BY ItemName",
+                        anatoliaSoftShipPlanTable,
+                        anatoliaSoftShipPlanLineTable,
                         tigerItemsTable,
-                        ficheNo
+                        astItemsTable
                 );
 
-                try (PreparedStatement statement = connection.prepareStatement(query);
-                     ResultSet resultSet = statement.executeQuery()) {
-
-                    while (resultSet.next()) {
-                        detailsList.add(new DraftReceipt(
-                                resultSet.getString("Malzeme Adı"),
-                                resultSet.getString("Miktar")
-                        ));
+                try (PreparedStatement statement = connection.prepareStatement(query)) {
+                    statement.setString(1, slipNr);
+                    try (ResultSet resultSet = statement.executeQuery()) {
+                        while (resultSet.next()) {
+                            detailsList.add(new DraftReceipt(
+                                    resultSet.getString("Malzeme Adı"),
+                                    resultSet.getString("Miktar")
+                            ));
+                        }
                     }
                 }
             } catch (Exception e) {
+                Log.e("FetchItemsTask", "Error fetching items", e);
                 e.printStackTrace();
             }
             return detailsList;
@@ -719,15 +721,13 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             headerRow.addView(headerScanned);
             tableLayout.addView(headerRow);
 
-            // Add dynamic rows for each item
+            // Add rows for non-TRAVERS items
             for (DraftReceipt detail : details) {
                 TableRow row = new TableRow(SevkiyatQR_ScreenActivity.this);
-                String materialName = detail.getMaterialName();
 
-                TextView materialView = createTextView(materialName);
-                TextView amountView = createTextView(detail.getAmount());
-                // Get actual scanned count from itemManager
-                TextView scannedView = createTextView(String.valueOf(itemManager.getScannedCountForItem(materialName)));
+                TextView materialView = createTextView(detail.getMaterialName());
+                TextView amountView = createTextView(detail.getAmount().replace(".00", ""));
+                TextView scannedView = createTextView(String.valueOf(itemManager.getScannedCountForItem(detail.getMaterialName())));
 
                 styleDataCell(materialView);
                 styleDataCell(amountView);
@@ -740,7 +740,6 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                 tableLayout.addView(row);
             }
 
-            // Update scan status after table is populated
             updateScanStatus();
         }
 
@@ -820,64 +819,108 @@ class ReceiptItemManager {
     }
     // Add this method to load draft data
     public void loadDraftData(DraftData draftData) {
+        Log.d(TAG, "=== Starting loadDraftData ===");
+
+        // Only load data for items that exist in our filtered list
+        Map<String, Integer> filteredCounts = new HashMap<>();
+        for (Map.Entry<String, Integer> entry : draftData.scannedItemCounts.entrySet()) {
+            if (itemQuantities.containsKey(entry.getKey())) {
+                filteredCounts.put(entry.getKey(), entry.getValue());
+                Log.d(TAG, String.format("Loading draft count for valid item: %s -> %d",
+                        entry.getKey(), entry.getValue()));
+            } else {
+                Log.d(TAG, "Skipping draft count for invalid item: " + entry.getKey());
+            }
+        }
+
+        this.scannedItemCounts = filteredCounts;
         this.scannedSerials = new HashSet<>(draftData.scannedSerials);
-        this.scannedItemCounts = new HashMap<>(draftData.scannedItemCounts);
-        this.itemQuantities = new HashMap<>(draftData.itemQuantities);
-        this.itemNames = new HashMap<>(draftData.itemNames);
+
+        Log.d(TAG, "=== End loadDraftData ===");
     }
     public ReceiptItemManager(String receiptNo, DatabaseHelper databaseHelper) {
         this.receiptNo = receiptNo;
         this.databaseHelper = databaseHelper;
     }
 
+    // Debug method to help us understand what's in the maps
+    void logItemState() {
+        Log.d(TAG, "Current state of item tracking:");
+        Log.d(TAG, "itemQuantities size: " + itemQuantities.size());
+        for (Map.Entry<String, Integer> entry : itemQuantities.entrySet()) {
+            Log.d(TAG, String.format("Item: %s, Quantity: %d", entry.getKey(), entry.getValue()));
+        }
+        Log.d(TAG, "scannedItemCounts size: " + scannedItemCounts.size());
+        for (Map.Entry<String, Integer> entry : scannedItemCounts.entrySet()) {
+            Log.d(TAG, String.format("Item: %s, Scanned: %d", entry.getKey(), entry.getValue()));
+        }
+    }
+
+// In ReceiptItemManager class
+
     public void loadReceiptItems() {
         try (Connection conn = databaseHelper.getTigerConnection()) {
-            String[] ficheNos = receiptNo.split("/");
             itemQuantities.clear();
             scannedItemCounts.clear();
             scannedSerials.clear();
             itemNames.clear();
 
-            String tigerStFicheTable = databaseHelper.getTigerDbTableName("STFICHE");
-            String tigerStLineTable = databaseHelper.getTigerDbTableName("STLINE");
+            String anatoliaSoftShipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
+            String anatoliaSoftShipPlanLineTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLANLINE");
             String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
-
-            String ficheNosList = Arrays.stream(ficheNos)
-                    .map(no -> "'" + no.trim() + "'")
-                    .collect(Collectors.joining(","));
+            String astItemsTable = databaseHelper.getAnatoliaSoftTableName("AST_ITEMS");
 
             String query = String.format(
-                    "SELECT DISTINCT " +
-                            "IT.CODE AS ItemCode, " +
-                            "IT.NAME AS ItemName, " +
-                            "SUM(SL.AMOUNT) AS TotalQuantity " +
-                            "FROM %s ST " +
-                            "INNER JOIN %s SL ON SL.STFICHEREF = ST.LOGICALREF " +
-                            "INNER JOIN %s IT ON IT.LOGICALREF = SL.STOCKREF " +
-                            "WHERE ST.FICHENO IN (%s) " +
-                            "AND ST.TRCODE = 8 " +
-                            "AND ST.BILLED = 0 " +
-                            "GROUP BY IT.CODE, IT.NAME",
-                    tigerStFicheTable, tigerStLineTable, tigerItemsTable, ficheNosList
+                    "WITH FilteredItems AS (" +
+                            "    SELECT " +
+                            "        IT.CODE AS ItemCode, " +
+                            "        IT.NAME AS ItemName, " +
+                            "        SHPL.QUANTITY AS Quantity " +
+                            "    FROM %s SHP " +
+                            "    INNER JOIN %s SHPL ON SHP.ID = SHPL.SHIPPLANID " +
+                            "    INNER JOIN %s IT ON IT.LOGICALREF = SHPL.ERPITEMID " +
+                            "    LEFT JOIN %s AST_IT ON AST_IT.CODE = IT.CODE " +  // Join with AST_ITEMS
+                            "    WHERE SHP.SLIPNR = ? " +
+                            "    AND SHP.STATUS = 0 " +
+                            "    AND IT.STGRPCODE <> 'TRAVERS' " +
+                            "    AND (AST_IT.GROUPCODE2 IS NULL OR AST_IT.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
+                            ")" +
+                            "SELECT " +
+                            "    ItemCode, " +
+                            "    ItemName, " +
+                            "    SUM(Quantity) AS TotalQuantity " +
+                            "FROM FilteredItems " +
+                            "GROUP BY ItemCode, ItemName",
+                    anatoliaSoftShipPlanTable,
+                    anatoliaSoftShipPlanLineTable,
+                    tigerItemsTable,
+                    astItemsTable
             );
 
-            try (PreparedStatement stmt = conn.prepareStatement(query);
-                 ResultSet rs = stmt.executeQuery()) {
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, receiptNo);
 
-                while (rs.next()) {
-                    String itemCode = rs.getString("ItemCode");
-                    String itemName = rs.getString("ItemName");
-                    int totalQuantity = rs.getInt("TotalQuantity");
-                    itemQuantities.put(itemCode, totalQuantity);
-                    itemNames.put(itemCode, itemName);
-                    scannedItemCounts.put(itemCode, 0);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        String itemCode = rs.getString("ItemCode");
+                        String itemName = rs.getString("ItemName");
+                        int quantity = rs.getInt("TotalQuantity");
+
+                        itemQuantities.put(itemCode, quantity);
+                        itemNames.put(itemCode, itemName);
+                        scannedItemCounts.put(itemCode, 0);
+                    }
                 }
             }
         } catch (SQLException e) {
             Log.e(TAG, "Error loading receipt items: " + e.getMessage(), e);
         }
     }
-
+    // Add this method to help with debugging
+    public void printItemCounts() {
+        Log.d(TAG, "Total Items Count: " + getTotalItems());
+        Log.d(TAG, "Scanned Items Count: " + getScannedCount());
+    }
     private String extractSerialNumber(String qrCode) {
         Matcher matcher = Pattern.compile("KAREKODNO_([^|]+)").matcher(qrCode);
         return matcher.find() ? matcher.group(1) : "";
@@ -895,34 +938,46 @@ class ReceiptItemManager {
             String serialNumber = extractSerialNumber(qrCode);
             String itemCode = extractItemCodeFromQR(qrCode);
 
-            // Check if serial has already been scanned
-            if (scannedSerials.contains(serialNumber)) {
-                return ScanResult.ALREADY_SCANNED;
-            }
+            // Debug logs
+            Log.d(TAG, "Attempting to scan item: " + itemCode);
+            Log.d(TAG, "Current valid items in itemQuantities: " + itemQuantities.keySet());
 
-            // Check if item exists in receipt
+            // Strict validation - only allow items that are in our filtered itemQuantities map
             if (!itemQuantities.containsKey(itemCode)) {
+                Log.d(TAG, "Rejected: Item not in filtered list: " + itemCode);
                 return ScanResult.ITEM_NOT_IN_RECEIPT;
             }
 
-            // Check quantity limits
-            int currentScannedCount = scannedItemCounts.get(itemCode);
-            int totalQuantity = itemQuantities.get(itemCode);
+            // Check for duplicate serial
+            if (scannedSerials.contains(serialNumber)) {
+                Log.d(TAG, "Rejected: Serial already scanned: " + serialNumber);
+                return ScanResult.ALREADY_SCANNED;
+            }
 
-            if (currentScannedCount >= totalQuantity) {
+            // Get the allowed quantity for this item
+            int allowedQuantity = itemQuantities.get(itemCode);
+            int currentCount = scannedItemCounts.getOrDefault(itemCode, 0);
+
+            Log.d(TAG, String.format("Item: %s, Current Count: %d, Allowed: %d",
+                    itemCode, currentCount, allowedQuantity));
+
+            if (currentCount >= allowedQuantity) {
+                Log.d(TAG, "Rejected: Item quantity exceeded");
                 return ScanResult.COMPLETE_ITEM;
             }
 
-
-            // Add to tracking collections
+            // If we get here, the item is valid and can be scanned
             scannedSerials.add(serialNumber);
             qrCodeCache.add(new ScannedQRItem(serialNumber, itemCode, null));
-            scannedItemCounts.put(itemCode, currentScannedCount + 1);
+            scannedItemCounts.put(itemCode, currentCount + 1);
+
+            Log.d(TAG, String.format("Successfully scanned item %s. New count: %d/%d",
+                    itemCode, currentCount + 1, allowedQuantity));
 
             return ScanResult.SUCCESS;
 
         } catch (Exception e) {
-            Log.e(TAG, "Error processing scanned item", e);
+            Log.e(TAG, "Error in cacheScannedItem: " + e.getMessage(), e);
             return ScanResult.ITEM_NOT_IN_RECEIPT;
         }
     }
@@ -936,29 +991,33 @@ class ReceiptItemManager {
             String shipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
             String shipPlanQRTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN_QR");
 
-            // Get ORGNR
-            String findOrgnrQuery = String.format(
-                    "SELECT TOP 1 ORGNR FROM %s WHERE STATUS = 0 AND SLIPNR = ?",
+            // Get ORGNR and ID from AST_SHIPPLAN
+            String findShipPlanQuery = String.format(
+                    "SELECT ID, ORGNR FROM %s WHERE STATUS = 0 AND SLIPNR = ?",
                     shipPlanTable
             );
 
             String orgnr = null;
-            try (PreparedStatement orgnrStmt = conn.prepareStatement(findOrgnrQuery)) {
-                orgnrStmt.setString(1, receiptNo);
-                try (ResultSet orgnrRs = orgnrStmt.executeQuery()) {
-                    if (orgnrRs.next()) {
-                        orgnr = orgnrRs.getString("ORGNR");
+            int shipPlanId = -1;
+
+            try (PreparedStatement stmt = conn.prepareStatement(findShipPlanQuery)) {
+                stmt.setString(1, receiptNo);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        orgnr = rs.getString("ORGNR");
+                        shipPlanId = rs.getInt("ID");
                     }
                 }
             }
 
-            if (orgnr == null) {
+            if (orgnr == null || shipPlanId == -1) {
+                Log.e(TAG, "Could not find ORGNR or ID for receipt: " + receiptNo);
                 return false;
             }
 
             // Insert QR records
             String insertQuery = String.format(
-                    "INSERT INTO %s (SHP_SERIALNO, SHP_ITEMCODE, SHP_ID) VALUES (?, ?, ?)",
+                    "INSERT INTO %s (SHP_SERIALNO, SHP_ITEMCODE, SHP_ID, SHIPPLANID) VALUES (?, ?, ?, ?)",
                     shipPlanQRTable
             );
 
@@ -967,6 +1026,7 @@ class ReceiptItemManager {
                     insertStmt.setString(1, item.serialNumber);
                     insertStmt.setString(2, item.itemCode);
                     insertStmt.setString(3, orgnr);
+                    insertStmt.setInt(4, shipPlanId);  // Add SHIPPLANID
                     insertStmt.addBatch();
                 }
                 insertStmt.executeBatch();
@@ -989,18 +1049,55 @@ class ReceiptItemManager {
                 );
     }
 
-    public int getScannedCount() {
-        return scannedItemCounts.values().stream()
-                .mapToInt(Integer::intValue)
-                .sum();
-    }
-
+    // Update getTotalItems to be more explicit
     public int getTotalItems() {
-        return itemQuantities.values().stream()
+        // Use a local variable to track the total
+        int total = 0;
+
+        // Log what we're about to count
+        Log.d(TAG, "=== Starting getTotalItems count ===");
+        Log.d(TAG, "Current itemQuantities map contents:");
+        for (Map.Entry<String, Integer> entry : itemQuantities.entrySet()) {
+            Log.d(TAG, String.format("Item in map: %s -> %d", entry.getKey(), entry.getValue()));
+        }
+
+        // Only count items from our itemQuantities map
+        total = itemQuantities.values().stream()
                 .mapToInt(Integer::intValue)
                 .sum();
+
+        Log.d(TAG, "Final total items count: " + total);
+        Log.d(TAG, "=== End getTotalItems count ===");
+        return total;
     }
 
+    // Update getScannedCount to match the strict validation
+    public int getScannedCount() {
+        // Use a local variable to track the total
+        int total = 0;
+
+        // Log what we're about to count
+        Log.d(TAG, "=== Starting getScannedCount ===");
+        Log.d(TAG, "Current scannedItemCounts map contents:");
+        for (Map.Entry<String, Integer> entry : scannedItemCounts.entrySet()) {
+            Log.d(TAG, String.format("Scanned item in map: %s -> %d", entry.getKey(), entry.getValue()));
+        }
+
+        // Only count scanned items that exist in our itemQuantities map
+        for (String itemCode : itemQuantities.keySet()) {
+            int scannedCount = scannedItemCounts.getOrDefault(itemCode, 0);
+            total += scannedCount;
+            Log.d(TAG, String.format("Adding to scanned total: Item %s, Count %d", itemCode, scannedCount));
+        }
+
+        Log.d(TAG, "Final scanned count: " + total);
+        Log.d(TAG, "=== End getScannedCount ===");
+        return total;
+    }
+    // Helper method to check if an item is valid
+    private boolean isValidItem(String itemCode) {
+        return itemQuantities.containsKey(itemCode);
+    }
     public int getScannedCountForItem(String itemName) {
         // Find the item code by name
         String itemCode = itemNames.entrySet().stream()

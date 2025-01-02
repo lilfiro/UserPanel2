@@ -65,39 +65,38 @@ public class SevkiyatMainActivity extends AppCompatActivity {
         @Override
         protected List<DraftReceipt> doInBackground(Void... voids) {
             List<DraftReceipt> drafts = new ArrayList<>();
-            try (Connection connection = databaseHelper.getTigerConnection()) {
+            try (Connection connection = databaseHelper.getAnatoliaSoftConnection()) {
                 // Dynamic table names using DatabaseHelper methods
                 String anatoliaSoftShipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
                 String anatoliaSoftShipPlanLineTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLANLINE");
                 String anatoliaSoftCarsTable = databaseHelper.getAnatoliaSoftTableName("AST_CARS");
-                String anatoliaSoftItemsTable = databaseHelper.getAnatoliaSoftTableName("AST_ITEMS");
                 String tigerItemsTable = databaseHelper.getTigerDbItemsTableName("ITEMS");
-                String tigerStLineTable = databaseHelper.getTigerDbTableName("STLINE");
 
                 String query = String.format(
                         "SELECT " +
                                 "SHP.ORGNR AS [Fiş No], " +
                                 "SHP.SLIPNR AS [Fiş Kodu], " +
-                                "STRING_AGG(CAST(STL.AMOUNT AS VARCHAR), ',') AS [Miktar], " +
-                                "COUNT(DISTINCT IT.LOGICALREF) AS [Toplam Kalem Sayısı], " +
+                                "STUFF((SELECT ',' + CAST(QUANTITY AS VARCHAR) " +
+                                "       FROM %s INNER_SHPL " +
+                                "       WHERE INNER_SHPL.SHIPPLANID = SHP.ID " +
+                                "       FOR XML PATH('')), 1, 1, '') AS [Miktar], " +
                                 "SHP.SLIPDATE AS [Tarih], " +
                                 "AC.ARAC_PLAKA AS [Araç Plaka], " +
                                 "SHP.STATUS AS [Durum], " +
                                 "SUM(SHPL.QUANTITY) AS [Total Quantity], " +
                                 "SUM(SHPL.TOTALWEIGHT) AS [Total Weight] " +
                                 "FROM %s SHP " +
-                                "LEFT JOIN %s SHPL ON SHP.ID = SHPL.SHIPPLANID " +
+                                "INNER JOIN %s SHPL ON SHP.ID = SHPL.SHIPPLANID " +
                                 "LEFT JOIN %s AC ON AC.ARAC_KODU = SHP.CARID " +
-                                "LEFT JOIN %s ITM ON ITM.ID = SHPL.ERPITEMID " +
                                 "LEFT JOIN %s IT ON IT.LOGICALREF = SHPL.ERPITEMID " +
-                                "LEFT JOIN %s STL ON STL.LOGICALREF = SHPL.ERPDESPATCHLINEID " +
-                                "GROUP BY SHP.STATUS, AC.ARAC_PLAKA, SHP.SLIPDATE, SHP.SLIPNR, SHP.ORGNR",
+                                "WHERE SHP.STATUS IN (0, 1) " +  // Modified this line to show both statuses
+                                "GROUP BY SHP.ID, SHP.STATUS, AC.ARAC_PLAKA, SHP.SLIPDATE, SHP.SLIPNR, SHP.ORGNR " +
+                                "ORDER BY SHP.STATUS ASC, SHP.SLIPDATE DESC",  // Added ORDER BY to show active first, then by date
+                        anatoliaSoftShipPlanLineTable,
                         anatoliaSoftShipPlanTable,
                         anatoliaSoftShipPlanLineTable,
                         anatoliaSoftCarsTable,
-                        anatoliaSoftItemsTable,
-                        tigerItemsTable,
-                        tigerStLineTable
+                        tigerItemsTable
                 );
 
                 try (PreparedStatement statement = connection.prepareStatement(query);
@@ -108,23 +107,17 @@ public class SevkiyatMainActivity extends AppCompatActivity {
                         String formattedDate = formatDate(date);
                         String receiptNo = resultSet.getString("Fiş No");
                         String ficheNo = resultSet.getString("Fiş Kodu");
-                        String carPlate = resultSet.getString("Araç Plaka");  // Fetch the car plate
+                        String carPlate = resultSet.getString("Araç Plaka");
                         String amount = resultSet.getString("Miktar");
-                        int itemCount = resultSet.getInt("Toplam Kalem Sayısı");
-                        String status;
-                        if (resultSet.getInt("Durum") == 0) {
-                            status = "DEVAM EDİYOR (" + itemCount + " Ürün)";
-                        } else {
-                            status = "TAMAMLANDI (" + itemCount + " Ürün)";
-                        }
+                        String status = resultSet.getInt("Durum") == 0 ? "DEVAM EDİYOR" : "TAMAMLANDI";
 
                         DraftReceipt draft = new DraftReceipt(
                                 formattedDate,
-                                amount,      // Pass amount here
+                                amount,
                                 status,
                                 ficheNo,
-                                carPlate,    // Pass car plate here
-                                receiptNo    // Pass receipt number here
+                                carPlate,
+                                receiptNo
                         );
 
                         drafts.add(draft);
@@ -158,5 +151,11 @@ public class SevkiyatMainActivity extends AppCompatActivity {
                 return date; // Return original date if parsing fails
             }
         }
+    }
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Refresh the data when returning to this activity
+        new FetchDraftReceiptsTask(new DatabaseHelper(this)).execute();
     }
 }
