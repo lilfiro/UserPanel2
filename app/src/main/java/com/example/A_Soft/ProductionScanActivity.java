@@ -563,8 +563,8 @@ public class ProductionScanActivity extends AppCompatActivity {
 
     private void batchInsertProductionItems(Connection conn, long slipId) throws SQLException {
         String insertItemsQuery = "INSERT INTO AST_PRODUCTION_ITEMS " +
-                "(SLIPID, KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, QUANTITY, ITMID) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)";
+                "(SLIPID, KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, CREATE_DATE, STATUS, OPERATOR, UNIT, QUANTITY, ITMID) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), ?, ?, ?, ?, ?)";
 
         // First, let's get all the item IDs we need in one query for better performance
         Map<String, Long> barcodeToItemId = new HashMap<>();
@@ -595,6 +595,7 @@ public class ProductionScanActivity extends AppCompatActivity {
                 String kareKodNoForItems = extractKareKodNoAfterENT(fullKareKodNo);
                 String tedasKirilim = extractTedasKirilimBeforeENT(fullKareKodNo);
                 String barcode = extractBarcode(qrCode);
+                String imalYili = extractPattern(qrCode, "IMALYILI");
 
                 // Get the item ID for this barcode
                 Long itemId = barcodeToItemId.get(barcode);
@@ -602,20 +603,21 @@ public class ProductionScanActivity extends AppCompatActivity {
                     throw new SQLException("Could not find item ID for barcode: " + barcode);
                 }
 
-                Log.d(TAG, "Adding to batch - SLIPID: " + slipId +
-                        ", KAREKODNO: " + kareKodNoForItems +
-                        ", TEDAS: " + tedasKirilim +
-                        ", ITMID: " + itemId);
-
+                // Handle NULL values properly
                 itemsStmt.setLong(1, slipId);
-                itemsStmt.setString(2, kareKodNoForItems);
-                itemsStmt.setString(3, tedasKirilim);
+                itemsStmt.setString(2, kareKodNoForItems.isEmpty() ? null : kareKodNoForItems);
+                itemsStmt.setString(3, tedasKirilim.isEmpty() ? null : tedasKirilim);
                 itemsStmt.setString(4, extractPattern(qrCode, "MARKA"));
-                itemsStmt.setString(5, barcode);
+                itemsStmt.setString(5, barcode.isEmpty() ? null : barcode);
                 itemsStmt.setString(6, extractPattern(qrCode, "TIPI"));
-                itemsStmt.setString(7, extractPattern(qrCode, "IMALYILI"));
-                itemsStmt.setString(8, barcode);
-                itemsStmt.setLong(9, itemId);
+                itemsStmt.setString(7, imalYili.isEmpty() ? null : imalYili);
+                itemsStmt.setString(8, barcode.isEmpty() ? null : barcode);
+                // CREATE_DATE is handled by GETDATE() in the query
+                itemsStmt.setString(9, item.entryMethod); // Status: SCANNER/MANUAL/CAMERA
+                itemsStmt.setString(10, currentOperator); // Operator: logged in user
+                itemsStmt.setString(11, "Adet"); // Unit is always "Adet"
+                itemsStmt.setInt(12, 1); // Quantity is always 1
+                itemsStmt.setLong(13, itemId); // ITMID from AST_ITEMS table
 
                 itemsStmt.addBatch();
             }
