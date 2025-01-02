@@ -542,13 +542,13 @@ public class ProductionScanActivity extends AppCompatActivity {
     private long insertProductionSlip(Connection conn) throws SQLException {
         Log.d(TAG, "Inserting slip with receipt number: " + currentReceiptNo);
 
-        String insertSlipQuery = "INSERT INTO AST_PRODUCTION_SLIPS (STATUS, SLIPDATE, SLIPNR, CREATE_DATE, CREATEDUSER, SLIPTYPE) " +
-                "OUTPUT INSERTED.ID VALUES (?, GETDATE(), ?, GETDATE(), ?, 2)";
+        String insertSlipQuery = "INSERT INTO AST_PRODUCTION_SLIPS " +
+                "(STATUS, SLIPDATE, SLIPNR, CREATEDUSER, SLIPTYPE, CREATE_DATE) " +
+                "OUTPUT INSERTED.ID VALUES (1, GETDATE(), ?, ?, 2, GETDATE())";
 
         try (PreparedStatement stmt = conn.prepareStatement(insertSlipQuery)) {
-            stmt.setInt(1, 1);  // Status
-            stmt.setString(2, currentReceiptNo);  // SLIPNR
-            stmt.setString(3, currentOperator);   // Operator
+            stmt.setString(1, currentReceiptNo);  // SLIPNR
+            stmt.setString(2, currentOperator);   // CREATEDUSER
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -563,8 +563,8 @@ public class ProductionScanActivity extends AppCompatActivity {
 
     private void batchInsertProductionItems(Connection conn, long slipId) throws SQLException {
         String insertItemsQuery = "INSERT INTO AST_PRODUCTION_ITEMS " +
-                "(SLIPID, KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, CREATE_DATE, STATUS, OPERATOR, UNIT, QUANTITY, ITMID) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), ?, ?, ?, ?, ?)";
+                "(KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, SLIPID, UNIT, QUANTITY, ITMID, ENTRYTYPE) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         // First, let's get all the item IDs we need in one query for better performance
         Map<String, Long> barcodeToItemId = new HashMap<>();
@@ -603,21 +603,19 @@ public class ProductionScanActivity extends AppCompatActivity {
                     throw new SQLException("Could not find item ID for barcode: " + barcode);
                 }
 
-                // Handle NULL values properly
-                itemsStmt.setLong(1, slipId);
-                itemsStmt.setString(2, kareKodNoForItems.isEmpty() ? null : kareKodNoForItems);
-                itemsStmt.setString(3, tedasKirilim.isEmpty() ? null : tedasKirilim);
-                itemsStmt.setString(4, extractPattern(qrCode, "MARKA"));
-                itemsStmt.setString(5, barcode.isEmpty() ? null : barcode);
-                itemsStmt.setString(6, extractPattern(qrCode, "TIPI"));
-                itemsStmt.setString(7, imalYili.isEmpty() ? null : imalYili);
-                itemsStmt.setString(8, barcode.isEmpty() ? null : barcode);
-                // CREATE_DATE is handled by GETDATE() in the query
-                itemsStmt.setString(9, item.entryMethod); // Status: SCANNER/MANUAL/CAMERA
-                itemsStmt.setString(10, currentOperator); // Operator: logged in user
-                itemsStmt.setString(11, "Adet"); // Unit is always "Adet"
-                itemsStmt.setInt(12, 1); // Quantity is always 1
-                itemsStmt.setLong(13, itemId); // ITMID from AST_ITEMS table
+                // Set values in the correct order according to the table structure
+                itemsStmt.setString(1, kareKodNoForItems.isEmpty() ? null : kareKodNoForItems);
+                itemsStmt.setString(2, tedasKirilim.isEmpty() ? null : tedasKirilim);
+                itemsStmt.setString(3, extractPattern(qrCode, "MARKA"));
+                itemsStmt.setString(4, barcode.isEmpty() ? null : barcode); // MALZEME is barcode
+                itemsStmt.setString(5, extractPattern(qrCode, "TIPI"));
+                itemsStmt.setString(6, imalYili.isEmpty() ? null : imalYili);
+                itemsStmt.setString(7, barcode.isEmpty() ? null : barcode);
+                itemsStmt.setLong(8, slipId);
+                itemsStmt.setString(9, "Adet");
+                itemsStmt.setInt(10, 1);
+                itemsStmt.setLong(11, itemId);
+                itemsStmt.setString(12, item.entryMethod); // ENTRY_TYPE: SCANNER/MANUAL/CAMERA
 
                 itemsStmt.addBatch();
             }
