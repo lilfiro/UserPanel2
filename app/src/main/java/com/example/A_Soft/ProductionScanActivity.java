@@ -9,6 +9,10 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.Editable;
@@ -45,6 +49,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -62,6 +67,8 @@ public class ProductionScanActivity extends AppCompatActivity {
     private static final long SCAN_DEBOUNCE_INTERVAL = 2000;
     private static final String PREF_NAME = "ProductionDrafts";
     private static final String KEY_DRAFT_DATA = "draft_data";
+    private ConnectivityManager connectivityManager;
+    private ConnectivityManager.NetworkCallback networkCallback;
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault());
 
     static {
@@ -104,6 +111,7 @@ public class ProductionScanActivity extends AppCompatActivity {
         SharedPreferences loginPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
         currentOperator = loginPrefs.getString("logged_in_username", "");
         initializeBasicComponents();
+        setupNetworkCallback();
         loadDraftData();
         requestCameraPermissionIfNeeded();
 
@@ -114,12 +122,11 @@ public class ProductionScanActivity extends AppCompatActivity {
         isCameraActive = false;
         cameraStateButton.setImageResource(R.drawable.camera_off);
     }
-
-
     private void initializeBasicComponents() {
         sharedPreferences = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         currentReceiptNo = getIntent().getStringExtra("RECEIPT_NO");
         databaseHelper = new DatabaseHelper(this);
+        receiptManager = new ProductionReceiptManager(this); // Initialize receipt manager
 
         tableLayout = findViewById(R.id.tableLayout);
         cameraPreview = findViewById(R.id.camera_preview);
@@ -133,7 +140,26 @@ public class ProductionScanActivity extends AppCompatActivity {
         loadInitialData();
         showScannerInputDialog();
     }
+    private void setupNetworkCallback() {
+        connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        networkCallback = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onLost(Network network) {
+                runOnUiThread(() -> showToast("İnternet bağlantısı kesildi"));
+            }
+        };
 
+        NetworkRequest request = new NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build();
+        connectivityManager.registerNetworkCallback(request, networkCallback);
+    }
+    private boolean isNetworkAvailable() {
+        NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(
+                connectivityManager.getActiveNetwork());
+        return capabilities != null &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+    }
     private void initializeButtons() {
         // Initialize buttons with correct types
         scanButton = (ImageButton) findViewById(R.id.scanButton);
@@ -234,6 +260,11 @@ public class ProductionScanActivity extends AppCompatActivity {
     }
 
     private void confirmProduction() {
+        if (!isNetworkAvailable()) {
+            showToast("İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");
+            return;
+        }
+
         if (scannedItems.isEmpty()) {
             showToast("Onaylanacak ürün bulunmamaktadır");
             return;
@@ -247,9 +278,18 @@ public class ProductionScanActivity extends AppCompatActivity {
                         try {
                             saveToProductionScanned();
                             runOnUiThread(() -> {
-                                showToast("Üretim onaylandı");
-                                clearDraft(); // Clear the draft data
-                                finish();     // Close the activity
+                                try {
+                                    // Update receipt status before deleting
+                                    receiptManager.updateReceiptStatus(currentReceiptNo, "TAMAMLANDI");
+                                    // Delete the receipt
+                                    receiptManager.deleteReceipt(currentReceiptNo);
+                                    showToast("Üretim onaylandı");
+                                    clearDraft();
+                                    finish();
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Error updating/deleting receipt", e);
+                                    showToast("Fiş silme hatası: " + e.getMessage());
+                                }
                             });
                         } catch (SQLException e) {
                             Log.e(TAG, "Error saving production", e);
@@ -262,6 +302,11 @@ public class ProductionScanActivity extends AppCompatActivity {
     }
 
     private void processQRCode(String qrCodeData) {
+        if (!isNetworkAvailable()) {
+            runOnUiThread(() -> showToast("İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin."));
+            return;
+        }
+
         if (qrCodeData == null || qrCodeData.isEmpty()) {
             return;
         }
@@ -271,7 +316,6 @@ public class ProductionScanActivity extends AppCompatActivity {
             return;
         }
 
-        // Prevent processing if it's the same QR code within debounce interval
         if (qrCodeData.equals(lastScannedQR) &&
                 (System.currentTimeMillis() - lastScanTime) < SCAN_DEBOUNCE_INTERVAL) {
             return;
@@ -288,13 +332,16 @@ public class ProductionScanActivity extends AppCompatActivity {
                     return;
                 }
 
-                // Extract TEDAS code from KAREKODNO
+                if (isAlreadyScanned(parsedData.kareKodNo)) {
+                    runOnUiThread(() -> showToast("Bu ürün zaten tarandı"));
+                    return;
+                }
+
                 String kareKodNoTedas = "";
                 if (parsedData.kareKodNo.contains("ENT")) {
                     kareKodNoTedas = parsedData.kareKodNo.split("ENT")[0];
                 }
 
-                // Validate both TEDAS codes match with barcode
                 if (!validateTedasCode(kareKodNoTedas, parsedData.tedasKirilim, parsedData.barcode)) {
                     runOnUiThread(() -> showToast("TEDAŞ kodu ve barkod eşleşmesi bulunamadı"));
                     return;
@@ -306,7 +353,9 @@ public class ProductionScanActivity extends AppCompatActivity {
                     return;
                 }
 
-                processScannedItem(parsedData, itemInfo, "KAMERA");
+                runOnUiThread(() -> showProcessedItemDialog(parsedData, itemInfo, () ->
+                        processScannedItem(parsedData, itemInfo, "KAMERA")
+                ));
 
             } catch (Exception e) {
                 Log.e(TAG, "QR Code processing error", e);
@@ -350,26 +399,43 @@ public class ProductionScanActivity extends AppCompatActivity {
         });
     }
 
+
     private boolean isAlreadyScanned(String kareKodNo) {
-        // First check if it's already in our current session
-        if (scannedKareKodNos.contains(kareKodNo)) {
-            return true;
+        if (!isNetworkAvailable()) {
+            showToast("İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");
+            return false;
         }
 
-        // Then check the database
+        String codeAfterENT = "";
+        if (kareKodNo.contains("ENT")) {
+            codeAfterENT = kareKodNo.substring(kareKodNo.indexOf("ENT") + 3);
+        }
+
+        // First check current session
+        for (String scanned : scannedKareKodNos) {
+            if (scanned.contains("ENT")) {
+                String existingCode = scanned.substring(scanned.indexOf("ENT") + 3);
+                if (existingCode.equals(codeAfterENT)) {
+                    return true;
+                }
+            }
+        }
+
+        // Then check database
         try (Connection conn = databaseHelper.getAnatoliaSoftConnection();
              PreparedStatement stmt = conn.prepareStatement(
-                     "SELECT COUNT(*) FROM AST_PRODUCTION_SCANNED WHERE KAREKODNO = ?")) {
+                     "SELECT COUNT(*) FROM AST_PRODUCTION_SCANNED WHERE " +
+                             "SUBSTRING(KAREKODNO, CHARINDEX('ENT', KAREKODNO) + 3, LEN(KAREKODNO)) = ?")) {
 
-            stmt.setString(1, kareKodNo);
+            stmt.setString(1, codeAfterENT);
             try (ResultSet rs = stmt.executeQuery()) {
                 rs.next();
                 return rs.getInt(1) > 0;
             }
         } catch (SQLException e) {
             Log.e(TAG, "Error checking if item is already scanned", e);
-            showToast("Duplicate check error: " + e.getMessage());
-            return true; // Err on the side of caution
+            showToast("Veritabanı kontrolü sırasında hata oluştu: " + e.getMessage());
+            return false;
         }
     }
 
@@ -435,83 +501,145 @@ public class ProductionScanActivity extends AppCompatActivity {
         try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
             conn.setAutoCommit(false);
             try {
-                batchInsertProductionItems(conn);
-                batchInsertProductionScanned(conn);
+                long slipId = insertProductionSlip(conn);
+                batchInsertProductionItems(conn, slipId);
+                batchInsertProductionScanned(conn, slipId);
+
+                Log.d(TAG, "Attempting to commit transaction...");
                 conn.commit();
+                Log.d(TAG, "Transaction committed successfully");
+
+                // Verify data was inserted
+                verifyDataInserted(conn, slipId);
+
             } catch (SQLException e) {
+                Log.e(TAG, "Error occurred, rolling back", e);
                 conn.rollback();
                 throw e;
-            } finally {
-                conn.setAutoCommit(true);
             }
         }
     }
 
-    private void batchInsertProductionItems(Connection conn) throws SQLException {
-        // First, get all existing full KAREKODNOs (including the ENT part)
-        Set<String> existingCodes = new HashSet<>();
+    private void verifyDataInserted(Connection conn, long slipId) throws SQLException {
         try (PreparedStatement stmt = conn.prepareStatement(
-                "SELECT TEDASKIRILIM + 'ENT' + KAREKODNO as FULL_KAREKODNO FROM AST_PRODUCTION_ITEMS")) {
+                "SELECT COUNT(*) FROM AST_PRODUCTION_SLIPS WHERE ID = ?")) {
+            stmt.setLong(1, slipId);
             try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    existingCodes.add(rs.getString("FULL_KAREKODNO"));
-                }
+                rs.next();
+                Log.d(TAG, "Verified slips count: " + rs.getInt(1));
             }
         }
 
+        try (PreparedStatement stmt = conn.prepareStatement(
+                "SELECT COUNT(*) FROM AST_PRODUCTION_ITEMS WHERE SLIPID = ?")) {
+            stmt.setLong(1, slipId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                rs.next();
+                Log.d(TAG, "Verified items count: " + rs.getInt(1));
+            }
+        }
+    }
+    private long insertProductionSlip(Connection conn) throws SQLException {
+        Log.d(TAG, "Inserting slip with receipt number: " + currentReceiptNo);
+
+        String insertSlipQuery = "INSERT INTO AST_PRODUCTION_SLIPS (STATUS, SLIPDATE, SLIPNR, CREATE_DATE, CREATEDUSER, SLIPTYPE) " +
+                "OUTPUT INSERTED.ID VALUES (?, GETDATE(), ?, GETDATE(), ?, 2)";
+
+        try (PreparedStatement stmt = conn.prepareStatement(insertSlipQuery)) {
+            stmt.setInt(1, 1);  // Status
+            stmt.setString(2, currentReceiptNo);  // SLIPNR
+            stmt.setString(3, currentOperator);   // Operator
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    long id = rs.getLong("ID");
+                    Log.d(TAG, "Created slip record with ID: " + id + " for receipt: " + currentReceiptNo);
+                    return id;
+                }
+                throw new SQLException("Failed to get slip ID");
+            }
+        }
+    }
+
+    private void batchInsertProductionItems(Connection conn, long slipId) throws SQLException {
         String insertItemsQuery = "INSERT INTO AST_PRODUCTION_ITEMS " +
-                "(KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, CREATE_DATE, STATUS, OPERATOR) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";  // Added OPERATOR parameter
+                "(SLIPID, KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, CREATE_DATE, STATUS, OPERATOR, UNIT, QUANTITY, ITMID) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), ?, ?, ?, ?, ?)";
+
+        // First, let's get all the item IDs we need in one query for better performance
+        Map<String, Long> barcodeToItemId = new HashMap<>();
+        try (PreparedStatement idStmt = conn.prepareStatement(
+                "SELECT ID, CODE FROM AST_ITEMS WHERE CODE IN (" +
+                        String.join(",", Collections.nCopies(scannedItems.size(), "?")) + ")")) {
+
+            int paramIndex = 1;
+            for (ScannedItem item : scannedItems) {
+                idStmt.setString(paramIndex++, extractBarcode(item.kareKodNo));
+            }
+
+            try (ResultSet rs = idStmt.executeQuery()) {
+                while (rs.next()) {
+                    barcodeToItemId.put(rs.getString("CODE"), rs.getLong("ID"));
+                }
+            }
+        }
 
         try (PreparedStatement itemsStmt = conn.prepareStatement(insertItemsQuery)) {
             for (ScannedItem item : scannedItems) {
                 String qrCode = item.kareKodNo;
                 String fullKareKodNo = extractPattern(qrCode, "KAREKODNO");
-
                 if (fullKareKodNo.isEmpty()) {
                     fullKareKodNo = extractPattern(qrCode, "TEDASKIRILIM");
                 }
 
-                // Skip if this full KAREKODNO (including ENT part) already exists in the database
-                if (existingCodes.contains(fullKareKodNo)) {
-                    Log.d(TAG, "Skipping existing item: " + fullKareKodNo);
-                    continue;
-                }
-
                 String kareKodNoForItems = extractKareKodNoAfterENT(fullKareKodNo);
                 String tedasKirilim = extractTedasKirilimBeforeENT(fullKareKodNo);
+                String barcode = extractBarcode(qrCode);
+                String imalYili = extractPattern(qrCode, "IMALYILI");
 
-                itemsStmt.setString(1, kareKodNoForItems);
-                itemsStmt.setString(2, tedasKirilim);
-                itemsStmt.setString(3, extractPattern(qrCode, "MARKA"));
-                itemsStmt.setString(4, extractPattern(qrCode, "MALZEME"));
-                itemsStmt.setString(5, extractPattern(qrCode, "TIPI"));
-                itemsStmt.setString(6, extractPattern(qrCode, "IMALYILI"));
-                itemsStmt.setString(7, extractBarcode(qrCode));
-                itemsStmt.setTimestamp(8, convertToSqlTimestamp(item.timestamp));
-                itemsStmt.setString(9, item.entryMethod);
-                itemsStmt.setString(10, currentOperator);  // Add operator information
+                // Get the item ID for this barcode
+                Long itemId = barcodeToItemId.get(barcode);
+                if (itemId == null) {
+                    throw new SQLException("Could not find item ID for barcode: " + barcode);
+                }
+
+                // Handle NULL values properly
+                itemsStmt.setLong(1, slipId);
+                itemsStmt.setString(2, kareKodNoForItems.isEmpty() ? null : kareKodNoForItems);
+                itemsStmt.setString(3, tedasKirilim.isEmpty() ? null : tedasKirilim);
+                itemsStmt.setString(4, extractPattern(qrCode, "MARKA"));
+                itemsStmt.setString(5, barcode.isEmpty() ? null : barcode);
+                itemsStmt.setString(6, extractPattern(qrCode, "TIPI"));
+                itemsStmt.setString(7, imalYili.isEmpty() ? null : imalYili);
+                itemsStmt.setString(8, barcode.isEmpty() ? null : barcode);
+                // CREATE_DATE is handled by GETDATE() in the query
+                itemsStmt.setString(9, item.entryMethod); // Status: SCANNER/MANUAL/CAMERA
+                itemsStmt.setString(10, currentOperator); // Operator: logged in user
+                itemsStmt.setString(11, "Adet"); // Unit is always "Adet"
+                itemsStmt.setInt(12, 1); // Quantity is always 1
+                itemsStmt.setLong(13, itemId); // ITMID from AST_ITEMS table
 
                 itemsStmt.addBatch();
             }
 
-            executeBatchWithValidation(itemsStmt, "AST_PRODUCTION_ITEMS");
+            int[] results = itemsStmt.executeBatch();
+            Log.d(TAG, "Batch execution results: " + java.util.Arrays.toString(results));
         }
     }
-    private void batchInsertProductionScanned(Connection conn) throws SQLException {
-        // First, get all existing KAREKODNOs
+    private void batchInsertProductionScanned(Connection conn, long slipId) throws SQLException {
         Set<String> existingCodes = new HashSet<>();
         try (PreparedStatement stmt = conn.prepareStatement(
-                "SELECT KAREKODNO FROM AST_PRODUCTION_SCANNED")) {
+                "SELECT SUBSTRING(KAREKODNO, CHARINDEX('ENT', KAREKODNO) + 3, LEN(KAREKODNO)) as code " +
+                        "FROM AST_PRODUCTION_SCANNED")) {
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    existingCodes.add(rs.getString("KAREKODNO"));
+                    existingCodes.add(rs.getString("code"));
                 }
             }
         }
 
         String insertScannedQuery = "INSERT INTO AST_PRODUCTION_SCANNED " +
-                "(KAREKODNO, MATERIAL_NAME, SCAN_DATE) VALUES (?, ?, ?)";  // Added OPERATOR
+                "(SLIPID, KAREKODNO, MATERIAL_NAME) VALUES (?, ?, ?)";
 
         try (PreparedStatement scannedStmt = conn.prepareStatement(insertScannedQuery)) {
             for (ScannedItem item : scannedItems) {
@@ -520,32 +648,51 @@ public class ProductionScanActivity extends AppCompatActivity {
                     fullKareKodNo = extractPattern(item.kareKodNo, "TEDASKIRILIM");
                 }
 
-                // Log the KAREKODNO being inserted
-                Log.d(TAG, "Inserting Scanned Item: KAREKODNO=" + fullKareKodNo);
-
-                // Skip if this item already exists
-                if (existingCodes.contains(fullKareKodNo)) {
-                    continue;
+                // Extract part after ENT
+                String codeAfterENT = "";
+                if (fullKareKodNo.contains("ENT")) {
+                    codeAfterENT = fullKareKodNo.substring(fullKareKodNo.indexOf("ENT") + 3);
+                    if (existingCodes.contains(codeAfterENT)) {
+                        continue;
+                    }
                 }
 
-                scannedStmt.setString(1, fullKareKodNo);
-                scannedStmt.setString(2, item.materialName);
-                scannedStmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
+                scannedStmt.setLong(1, slipId);
+                scannedStmt.setString(2, fullKareKodNo);
+
+                // Get correct material name from database
+                String correctMaterialName = getCorrectMaterialName(conn, extractPattern(item.kareKodNo, "TEDASKIRILIM"), extractBarcode(item.kareKodNo));
+                scannedStmt.setString(3, correctMaterialName != null ? correctMaterialName : item.materialName);
 
                 scannedStmt.addBatch();
             }
 
-            try {
-                int[] results = scannedStmt.executeBatch();
-                // Log the results
-                for (int i = 0; i < results.length; i++) {
-                    Log.d(TAG, "Batch result " + i + ": " + results[i]);
+            executeBatchWithValidation(scannedStmt, "AST_PRODUCTION_SCANNED");
+        }
+    }
+    ProductionReceiptManager receiptManager;
+    private void updateReceiptStatus(String receiptNo) {
+
+        receiptManager.updateReceiptStatus(receiptNo, "TAMAMLANDI");
+    }
+
+    private String getCorrectMaterialName(Connection conn, String tedasKirilim, String barcode) throws SQLException {
+        String query = "SELECT i.GROUPCODE + ' ' + i.DESCRIPTION as MATERIAL_NAME " +
+                "FROM AST_ITEMS i " +
+                "JOIN AST_TEMS_TEDAS t ON i.CODE = t.ITM_CODE " +
+                "WHERE t.ITM_TEDAS = ? AND i.CODE = ?";
+
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.setString(1, tedasKirilim);
+            stmt.setString(2, barcode);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("MATERIAL_NAME");
                 }
-            } catch (SQLException e) {
-                Log.e(TAG, "Error executing batch insert: " + e.getMessage(), e);
-                throw e;
             }
         }
+        return null;
     }
     private void executeBatchWithValidation(PreparedStatement stmt, String tableName) throws SQLException {
         int[] results = stmt.executeBatch();
@@ -658,14 +805,17 @@ public class ProductionScanActivity extends AppCompatActivity {
 
                 String malzeme = itemParts[0];
                 String tipi = itemParts[1];
-                String tedasPart = fullKareKodNo.split("ENT")[0];  // Extract TEDAS part
+                String tedasPart = fullKareKodNo.split("ENT")[0];
 
                 String formattedQR = formatManualQRCode(fullKareKodNo, tedasPart, malzeme, tipi, imalYili, barcode);
 
+                QRCodeData qrData = new QRCodeData(formattedQR, fullKareKodNo, tedasPart, barcode);
+
                 runOnUiThread(() -> {
                     dialog.dismiss();
-                    processScannedItem(new QRCodeData(formattedQR, fullKareKodNo, tedasPart, barcode),
-                            itemInfo, "MANUAL");
+                    showProcessedItemDialog(qrData, itemInfo, () ->
+                            processScannedItem(qrData, itemInfo, "MANUAL")
+                    );
                 });
 
             } catch (Exception e) {
@@ -718,7 +868,10 @@ public class ProductionScanActivity extends AppCompatActivity {
     private boolean validateTedasCode(String kareKodNoTedas, String tedasKirilim, String barcode) {
         Log.d(TAG, "Validating TEDAS: KareKodNo part = '" + kareKodNoTedas +
                 "', TedasKirilim = '" + tedasKirilim + "', Barcode = '" + barcode + "'");
-
+        if (!isNetworkAvailable()) {
+            showToast("İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");
+            return false;
+        }
         // First check if KAREKODNO TEDAS part matches TEDASKIRILIM
         if (!kareKodNoTedas.equals(tedasKirilim)) {
             Log.d(TAG, "TEDAS codes don't match between KAREKODNO and TEDASKIRILIM");
@@ -826,17 +979,20 @@ public class ProductionScanActivity extends AppCompatActivity {
         return qrCode.matches("\\|\\|KAREKODNO_.*\\|TEDASKIRILIM_.*\\|MARKA_.*\\|MALZEME_.*\\|TIPI_.*\\|IMALYILI_.*\\|\\|.*");
     }
 
-    private void showProcessedItemDialog(QRCodeData data, String itemInfo) {
+    private void showProcessedItemDialog(QRCodeData data, String itemInfo, Runnable onConfirm) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("İşlenen Ürün Detayları");
         builder.setMessage(formatScannedItemText(data.rawData, DATE_FORMAT.format(new Date())));
+        builder.setCancelable(false); // Prevent dialog from being canceled on outside touch
         builder.setPositiveButton("Onayla", (dialog, which) -> {
-            new Handler().postDelayed(() -> { // Delay before reopening scanner
-                processScannedItem(data, itemInfo, "SCANNER");
-                showScannerInputDialog();
-            }, 500); // 500ms delay
+            new Handler().postDelayed(() -> {
+                onConfirm.run();
+            }, 500);
         });
-        builder.show();
+        builder.setNegativeButton("İptal", (dialog, which) -> dialog.dismiss());
+        AlertDialog dialog = builder.create();
+        dialog.setCanceledOnTouchOutside(false); // Prevent cancellation when touching outside
+        dialog.show();
     }
     private void processScannerInput(String scannedData, AlertDialog dialog, EditText scannerInput) {
         try {
@@ -857,7 +1013,8 @@ public class ProductionScanActivity extends AppCompatActivity {
                 return;
             }
 
-            String kareKodNoTedas = parsedData.kareKodNo.contains("ENT") ? parsedData.kareKodNo.split("ENT")[0] : "";
+            String kareKodNoTedas = parsedData.kareKodNo.contains("ENT") ?
+                    parsedData.kareKodNo.split("ENT")[0] : "";
 
             if (isAlreadyScanned(parsedData.kareKodNo)) {
                 runOnUiThread(() -> {
@@ -886,10 +1043,13 @@ public class ProductionScanActivity extends AppCompatActivity {
 
             runOnUiThread(() -> {
                 dialog.dismiss();
-                new Handler().postDelayed(() -> { // Add delay before reopening dialog
-                    showProcessedItemDialog(parsedData, itemInfo);
-                    isProcessing = false; // Reset flag after delay
-                }, 500); // 500ms delay
+                new Handler().postDelayed(() -> {
+                    showProcessedItemDialog(parsedData, itemInfo, () -> {
+                        processScannedItem(parsedData, itemInfo, "SCANNER");
+                        showScannerInputDialog();
+                    });
+                    isProcessing = false;
+                }, 500);
             });
 
         } catch (Exception e) {
@@ -904,12 +1064,15 @@ public class ProductionScanActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(title);
         builder.setMessage(message);
+        builder.setCancelable(false); // Prevent dialog from being canceled on outside touch
         builder.setPositiveButton("Tamam", (dialog, which) -> {
             clearAndRefocusInput(scannerInput);
             dialog.dismiss();
         });
         builder.setOnDismissListener(dialog -> clearAndRefocusInput(scannerInput));
-        builder.show();
+        AlertDialog dialog = builder.create();
+        dialog.setCanceledOnTouchOutside(false); // Prevent cancellation when touching outside
+        dialog.show();
     }
 
     private void clearAndRefocusInput(EditText scannerInput) {
@@ -1238,6 +1401,26 @@ public class ProductionScanActivity extends AppCompatActivity {
         super.onResume();
         if (cameraPreview != null) {
             cameraPreview.startCamera();
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (!scannedItems.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Taslak Kaydet")
+                    .setMessage("Okutulmuş ürünler var, taslak olarak kaydedilsin mi?")
+                    .setPositiveButton("Evet", (dialog, which) -> {
+                        saveDraft();
+                        super.onBackPressed();
+                    })
+                    .setNegativeButton("Hayır", (dialog, which) -> {
+                        super.onBackPressed();
+                    })
+                    .setCancelable(true)
+                    .show();
+        } else {
+            super.onBackPressed();
         }
     }
 

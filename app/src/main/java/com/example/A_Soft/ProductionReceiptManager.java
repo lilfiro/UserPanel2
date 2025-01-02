@@ -43,7 +43,30 @@ public class ProductionReceiptManager {
         receipts.remove(receiptNo);
         prefs.edit().putString(RECEIPTS_KEY, gson.toJson(receipts)).apply();
     }
+    public void updateReceiptStatus(String receiptNo, String status) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        Map<String, String> receipts = getReceiptsMap(prefs);
 
+        String json = receipts.get(receiptNo);
+        if (json != null) {
+            ProductionReceipt receipt = gson.fromJson(json, ProductionReceipt.class);
+            receipt.setStatus(status);
+            receipts.put(receiptNo, gson.toJson(receipt));
+            prefs.edit().putString(RECEIPTS_KEY, gson.toJson(receipts)).apply();
+        }
+    }
+
+    public void removeCompletedReceipts() {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        Map<String, String> receipts = getReceiptsMap(prefs);
+
+        receipts.entrySet().removeIf(entry -> {
+            ProductionReceipt receipt = gson.fromJson(entry.getValue(), ProductionReceipt.class);
+            return "TAMAMLANDI".equals(receipt.getStatus());
+        });
+
+        prefs.edit().putString(RECEIPTS_KEY, gson.toJson(receipts)).apply();
+    }
     public List<ProductionReceipt> getAllReceipts() {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         Map<String, String> receipts = getReceiptsMap(prefs);
@@ -61,4 +84,5 @@ public class ProductionReceiptManager {
         Type type = new TypeToken<Map<String, String>>(){}.getType();
         return gson.fromJson(json, type);
     }
+
 }

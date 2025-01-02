@@ -91,6 +91,7 @@ public class UretimMainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        receiptManager.removeCompletedReceipts();
         adapter.updateReceipts(receiptManager.getAllReceipts());
     }
 }

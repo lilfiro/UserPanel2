@@ -50,7 +50,34 @@
             <!-- Dynamic rows will be added here -->
 
         </TableLayout>
+        <!-- List Button -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp">
 
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/camera_state"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@drawable/camera_off"
+                    android:scaleType="fitCenter"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:padding="8dp"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Kamera"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+        </LinearLayout>
         <!-- Camera Preview with Border -->
         <FrameLayout
             android:layout_width="match_parent"
@@ -61,15 +88,20 @@
 
             <com.example.A_Soft.CameraSourcePreview
                 android:id="@+id/camera_preview"
-                android:layout_width="match_parent"
-                android:layout_height="375dp"/>
+                android:layout_width="375dp"
+                android:layout_height="375dp"
+                android:visibility="gone" />
 
-            <!-- Scan Area Indicator -->
+
+            <!-- Optional Scan Area Indicator -->
             <View
+                android:id="@+id/scan_area_indicator"
                 android:layout_width="200dp"
                 android:layout_height="200dp"
                 android:layout_gravity="center"
-                android:background="@drawable/scan_area"/>
+                android:background="@drawable/scan_area"
+                android:visibility="gone" />
+
 
         </FrameLayout>
 
