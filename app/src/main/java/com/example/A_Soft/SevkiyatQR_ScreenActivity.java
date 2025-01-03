@@ -614,11 +614,77 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     }
 
     // Update the updateReceiptStatus method
+// In SevkiyatQR_ScreenActivity class, update the updateReceiptStatus method:
+
     private void updateReceiptStatus() {
         executorService.submit(() -> {
-            boolean itemsInserted = itemManager.bulkInsertScannedItems();
-
             try (Connection connection = databaseHelper.getAnatoliaSoftConnection()) {
+                // First check stock levels
+                String stockQuery = "SELECT " +
+                        "t.CODE, " +
+                        "t.TOTAL_QUANTITY AS PLANNED_QUANTITY, " +
+                        "COALESCE(s.AVAILABLE_STOCK, 0) AS AVAILABLE_STOCK " +
+                        "FROM (" +
+                        "SELECT i.CODE, SUM(sl.QUANTITY) as TOTAL_QUANTITY " +
+                        "FROM " + databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN") + " sp " +
+                        "JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLANLINE") + " sl ON sp.ID = sl.SHIPPLANID " +
+                        "JOIN " + databaseHelper.getTigerDbItemsTableName("ITEMS") + " ti ON ti.LOGICALREF = sl.ERPITEMID " +
+                        "JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " i ON i.CODE = ti.CODE " +
+                        "WHERE sp.SLIPNR = ? " +
+                        "GROUP BY i.CODE" +
+                        ") t " +
+                        "LEFT JOIN (" +
+                        "SELECT CODE, SUM(MIKTAR) as AVAILABLE_STOCK FROM (" +
+                        "SELECT ITMAS.CODE, SUM(SHPLN.QUANTITY) as MIKTAR " +
+                        "FROM " + databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLANLINE") + " SHPLN " +
+                        "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN") + " SHP ON SHPLN.SHIPPLANID=SHP.ID " +
+                        "INNER JOIN " + databaseHelper.getTigerDbItemsTableName("ITEMS") + " ITMLOGO ON SHPLN.ERPITEMID=ITMLOGO.LOGICALREF " +
+                        "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " ITMAS ON ITMLOGO.CODE=ITMAS.CODE " +
+                        "WHERE SHP.STATUS=1 " +
+                        "GROUP BY ITMAS.CODE " +
+                        "UNION ALL " +
+                        "SELECT ITM.CODE, SUM((CASE PRDSLP.SLIPTYPE WHEN 1 THEN 1 WHEN 2 THEN -1 END) * PRDTRN.QUANTITY) as MIKTAR " +
+                        "FROM " + databaseHelper.getAnatoliaSoftTableName("AST_PRODUCTION_ITEMS") + " PRDTRN " +
+                        "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_PRODUCTION_SLIPS") + " PRDSLP ON PRDTRN.SLIPID=PRDSLP.ID " +
+                        "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " ITM ON ITM.CODE=PRDTRN.MALZEME " +
+                        "GROUP BY ITM.CODE" +
+                        ") stock_query " +
+                        "GROUP BY CODE" +
+                        ") s ON t.CODE = s.CODE";
+
+                List<String> insufficientStockItems = new ArrayList<>();
+
+                try (PreparedStatement stmt = connection.prepareStatement(stockQuery)) {
+                    stmt.setString(1, currentReceiptNo);
+
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        while (rs.next()) {
+                            String itemCode = rs.getString("CODE");
+                            int plannedQuantity = rs.getInt("PLANNED_QUANTITY");
+                            int availableStock = rs.getInt("AVAILABLE_STOCK");
+
+                            if (availableStock < plannedQuantity) {
+                                insufficientStockItems.add(itemCode);
+                            }
+                        }
+                    }
+                }
+
+                if (!insufficientStockItems.isEmpty()) {
+                    // Build error message for insufficient stock items
+                    StringBuilder errorMessage = new StringBuilder();
+                    for (String itemCode : insufficientStockItems) {
+                        errorMessage.append("Stoktaki [").append(itemCode).append("] malzemesi, sevkiyat planındaki miktar ile uyuşmuyor\n");
+                    }
+
+                    String finalErrorMessage = errorMessage.toString();
+                    runOnUiThread(() -> showAlert("Stok Hatası", finalErrorMessage));
+                    return;
+                }
+
+                // If stock levels are sufficient, proceed with updating status
+                boolean itemsInserted = itemManager.bulkInsertScannedItems();
+
                 String updateQuery = "UPDATE " +
                         databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN") +
                         " SET STATUS = 1 WHERE SLIPNR = ?";
@@ -632,6 +698,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                         showAlert("Hata", "Sevkiyat tamamlanamadı.");
                     }
                 });
+
             } catch (SQLException e) {
                 Log.e(TAG, "Error updating receipt status", e);
                 runOnUiThread(() ->
