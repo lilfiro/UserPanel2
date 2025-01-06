@@ -1,7 +1,7 @@
 package com.example.A_Soft;
 
 public class DraftReceipt {
-    private String date, materialCode, materialName, amount, receiptNo, status, oprFicheNo, carPlate;
+    private String date, materialCode, materialName, amount, receiptNo, status, oprFicheNo, carPlate, carUser;
 
     public DraftReceipt(String materialName, String amount) {
         this.materialName = materialName;
@@ -11,31 +11,24 @@ public class DraftReceipt {
         this.receiptNo = null;
         this.status = null;
         this.oprFicheNo = null;
+        this.carPlate = null;
+        this.carUser = null;
     }
 
-    public DraftReceipt(String date, String amount, String status, String oprFicheNo, String carPlate, String receiptNo) {
+    public DraftReceipt(String date, String amount, String status, String oprFicheNo,
+                        String carPlate, String carUser, String receiptNo) {
         this.date = date;
         this.amount = amount;
         this.status = status;
         this.oprFicheNo = oprFicheNo;
         this.carPlate = carPlate;
+        this.carUser = carUser;
         this.receiptNo = receiptNo;
     }
-    // Getters and setters
+
+    // Existing getters and setters
     public String getDate() {
         return date;
-    }
-
-    public void setDate(String date) {
-        this.date = date;
-    }
-
-    public String getMaterialCode() {
-        return materialCode;
-    }
-
-    public void setMaterialCode(String materialCode) {
-        this.materialCode = materialCode;
     }
 
     public String getMaterialName() {
@@ -53,9 +46,23 @@ public class DraftReceipt {
     public void setAmount(String amount) {
         this.amount = amount;
     }
+
     public String getCarPlate() {
         return carPlate;
     }
+
+    public void setCarPlate(String carPlate) {
+        this.carPlate = carPlate;
+    }
+
+    public String getCarUser() {
+        return carUser;
+    }
+
+    public void setCarUser(String carUser) {
+        this.carUser = carUser;
+    }
+
     public String getReceiptNo() {
         return receiptNo;
     }

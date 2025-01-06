@@ -52,6 +52,7 @@
 
             <!-- Üretim Icon and Label -->
             <LinearLayout
+                android:id="@+id/layout_uretim"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -80,6 +81,7 @@
 
             <!-- Sevkiyat Icon and Label -->
             <LinearLayout
+                android:id="@+id/layout_sevkiyat"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"

@@ -1,5 +1,7 @@
 package com.example.A_Soft;
 
+import static com.example.A_Soft.LoginActivity.SAVED_USERNAME_KEY;
+
 import android.Manifest;
 import android.app.AlertDialog;
 import android.content.ClipData;
@@ -100,16 +102,35 @@ public class ProductionScanActivity extends AppCompatActivity {
     private boolean isProcessing = false;
     private ImageButton cameraStateButton;
     private boolean isCameraActive = false;
-
+    private String creationTime;
     private String currentOperator;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_production_scan);
-        // Get logged in username from SharedPreferences
+
+        // Get creation time and operator from intent
+        creationTime = getIntent().getStringExtra("CREATION_TIME");
+        if (creationTime == null) {
+            creationTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                    .format(new Date());
+        }
+        // Try both SharedPreferences to ensure we get the username
         SharedPreferences loginPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
         currentOperator = loginPrefs.getString("logged_in_username", "");
+
+        if (currentOperator.isEmpty()) {
+            // Fallback to PREFS_NAME if needed
+            SharedPreferences mainPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
+            currentOperator = mainPrefs.getString(SAVED_USERNAME_KEY, "");
+        }
+
+        if (currentOperator.isEmpty()) {
+            // Log error and possibly show message to user
+            Log.e(TAG, "Could not retrieve logged in username");
+            showToast("Kullanıcı bilgisi alınamadı");
+        }
         initializeBasicComponents();
         setupNetworkCallback();
         loadDraftData();
@@ -542,13 +563,25 @@ public class ProductionScanActivity extends AppCompatActivity {
     private long insertProductionSlip(Connection conn) throws SQLException {
         Log.d(TAG, "Inserting slip with receipt number: " + currentReceiptNo);
 
-        String insertSlipQuery = "INSERT INTO AST_PRODUCTION_SLIPS (STATUS, SLIPDATE, SLIPNR, CREATE_DATE, CREATEDUSER, SLIPTYPE) " +
-                "OUTPUT INSERTED.ID VALUES (?, GETDATE(), ?, GETDATE(), ?, 2)";
+        // Verify we have a valid operator name
+        if (currentOperator == null || currentOperator.isEmpty()) {
+            // Try to get it one more time
+            SharedPreferences loginPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
+            currentOperator = loginPrefs.getString("logged_in_username", "Unknown User");
+        }
+
+        String insertSlipQuery = "INSERT INTO AST_PRODUCTION_SLIPS " +
+                "(STATUS, SLIPDATE, SLIPNR, CREATEDUSERNAME, SLIPTYPE, CREATEDDATE, SLIPTYPEID) " +
+                "OUTPUT INSERTED.ID VALUES (1, ?, ?, ?, 1, GETDATE(), 1)";
 
         try (PreparedStatement stmt = conn.prepareStatement(insertSlipQuery)) {
-            stmt.setInt(1, 1);  // Status
-            stmt.setString(2, currentReceiptNo);  // SLIPNR
-            stmt.setString(3, currentOperator);   // Operator
+            // Convert creation time string to Timestamp
+            Timestamp slipDate = Timestamp.valueOf(creationTime);
+            stmt.setTimestamp(1, slipDate);  // SLIPDATE (creation time from + button)
+            stmt.setString(2, databaseHelper.getLastSlipNumber());  // SLIPNR
+            stmt.setString(3, currentOperator);  // CREATEDUSERNAME
+
+            Log.d(TAG, "Inserting slip with operator: " + currentOperator); // Add logging
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -563,8 +596,8 @@ public class ProductionScanActivity extends AppCompatActivity {
 
     private void batchInsertProductionItems(Connection conn, long slipId) throws SQLException {
         String insertItemsQuery = "INSERT INTO AST_PRODUCTION_ITEMS " +
-                "(SLIPID, KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, CREATE_DATE, STATUS, OPERATOR, UNIT, QUANTITY, ITMID) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), ?, ?, ?, ?, ?)";
+                "(KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, SLIPID, UNIT, QUANTITY, ITMID, ENTRYTYPE, SLIPTYPEID, SIGN, CREATE_DATE) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, GETDATE())";
 
         // First, let's get all the item IDs we need in one query for better performance
         Map<String, Long> barcodeToItemId = new HashMap<>();
@@ -603,21 +636,19 @@ public class ProductionScanActivity extends AppCompatActivity {
                     throw new SQLException("Could not find item ID for barcode: " + barcode);
                 }
 
-                // Handle NULL values properly
-                itemsStmt.setLong(1, slipId);
-                itemsStmt.setString(2, kareKodNoForItems.isEmpty() ? null : kareKodNoForItems);
-                itemsStmt.setString(3, tedasKirilim.isEmpty() ? null : tedasKirilim);
-                itemsStmt.setString(4, extractPattern(qrCode, "MARKA"));
-                itemsStmt.setString(5, barcode.isEmpty() ? null : barcode);
-                itemsStmt.setString(6, extractPattern(qrCode, "TIPI"));
-                itemsStmt.setString(7, imalYili.isEmpty() ? null : imalYili);
-                itemsStmt.setString(8, barcode.isEmpty() ? null : barcode);
-                // CREATE_DATE is handled by GETDATE() in the query
-                itemsStmt.setString(9, item.entryMethod); // Status: SCANNER/MANUAL/CAMERA
-                itemsStmt.setString(10, currentOperator); // Operator: logged in user
-                itemsStmt.setString(11, "Adet"); // Unit is always "Adet"
-                itemsStmt.setInt(12, 1); // Quantity is always 1
-                itemsStmt.setLong(13, itemId); // ITMID from AST_ITEMS table
+                // Set values in the correct order according to the table structure
+                itemsStmt.setString(1, kareKodNoForItems.isEmpty() ? null : kareKodNoForItems);
+                itemsStmt.setString(2, tedasKirilim.isEmpty() ? null : tedasKirilim);
+                itemsStmt.setString(3, extractPattern(qrCode, "MARKA"));
+                itemsStmt.setString(4, barcode.isEmpty() ? null : barcode); // MALZEME is barcode
+                itemsStmt.setString(5, extractPattern(qrCode, "TIPI"));
+                itemsStmt.setString(6, imalYili.isEmpty() ? null : imalYili);
+                itemsStmt.setString(7, barcode.isEmpty() ? null : barcode);
+                itemsStmt.setLong(8, slipId);
+                itemsStmt.setString(9, "Adet");
+                itemsStmt.setInt(10, 1);
+                itemsStmt.setLong(11, itemId);
+                itemsStmt.setString(12, item.entryMethod); // ENTRY_TYPE: SCANNER/MANUAL/CAMERA
 
                 itemsStmt.addBatch();
             }
@@ -677,15 +708,31 @@ public class ProductionScanActivity extends AppCompatActivity {
     }
 
     private String getCorrectMaterialName(Connection conn, String tedasKirilim, String barcode) throws SQLException {
-        String query = "SELECT i.GROUPCODE + ' ' + i.DESCRIPTION as MATERIAL_NAME " +
-                "FROM AST_ITEMS i " +
-                "JOIN AST_TEMS_TEDAS t ON i.CODE = t.ITM_CODE " +
-                "WHERE t.ITM_TEDAS = ? AND i.CODE = ?";
+        // If we have tedasKirilim, use it in the query
+        if (tedasKirilim != null && !tedasKirilim.isEmpty()) {
+            String query = "SELECT i.GROUPCODE + ' ' + i.DESCRIPTION as MATERIAL_NAME " +
+                    "FROM AST_ITEMS i " +
+                    "JOIN AST_ITEMTYPES t ON i.ID = t.ITEMID " +  // Fixed join condition
+                    "WHERE t.DESCRIPTION = ? AND i.CODE = ?";
 
-        try (PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, tedasKirilim);
-            stmt.setString(2, barcode);
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, tedasKirilim);
+                stmt.setString(2, barcode);
 
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getString("MATERIAL_NAME");
+                    }
+                }
+            }
+        }
+
+        // If no tedasKirilim or previous query failed, try with just the barcode
+        String fallbackQuery = "SELECT i.GROUPCODE + ' ' + i.DESCRIPTION as MATERIAL_NAME " +
+                "FROM AST_ITEMS i WHERE i.CODE = ?";
+
+        try (PreparedStatement stmt = conn.prepareStatement(fallbackQuery)) {
+            stmt.setString(1, barcode);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     return rs.getString("MATERIAL_NAME");
@@ -826,37 +873,45 @@ public class ProductionScanActivity extends AppCompatActivity {
     }
 
     private String getItemInfoFromDatabase(String tedasKirilim, String barcode) {
-        String tedasCode = tedasKirilim;
-        if (tedasKirilim.contains("ENT")) {
-            tedasCode = tedasKirilim.split("ENT")[0];
-        }
+        Log.d(TAG, String.format("GetItemInfo: TEDAS code = '%s', barcode = '%s'",
+                tedasKirilim != null ? tedasKirilim : "null", barcode));
 
-        Log.d(TAG, "GetItemInfo: TEDAS code = '" + tedasCode + "', barcode = '" + barcode + "'");
+        try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
+            // First try: with TEDAS if available
+            if (tedasKirilim != null && !tedasKirilim.isEmpty()) {
+                String tedasCode = tedasKirilim.contains("ENT") ?
+                        tedasKirilim.split("ENT")[0] : tedasKirilim;
 
-        try (Connection conn = databaseHelper.getAnatoliaSoftConnection();
-             PreparedStatement stmt = conn.prepareStatement(
-                     "SELECT i.DESCRIPTION, i.GROUPCODE, t.ITM_TEDAS " +
-                             "FROM AST_ITEMS i " +
-                             "JOIN AST_TEMS_TEDAS t ON i.CODE = t.ITM_CODE " +
-                             "WHERE i.CODE = ? AND t.ITM_TEDAS = ?")) {
+                String query = "SELECT i.DESCRIPTION, i.GROUPCODE, t.DESCRIPTION as TEDAS_DESCRIPTION " +
+                        "FROM AST_ITEMS i " +
+                        "JOIN AST_ITEMTYPES t ON i.ID = t.ITEMID " +  // Fixed join condition
+                        "WHERE i.CODE = ? AND t.DESCRIPTION = ?";
 
-            stmt.setString(1, barcode.trim());
-            stmt.setString(2, tedasCode.trim());
+                try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                    stmt.setString(1, barcode.trim());
+                    stmt.setString(2, tedasCode.trim());
 
-            Log.d(TAG, "GetItemInfo Query: " + stmt.toString());
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            return formatItemInfo(rs);
+                        }
+                    }
+                }
+            }
 
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    String dbMalzeme = rs.getString("GROUPCODE");
-                    String dbTipi = rs.getString("DESCRIPTION");
-                    String dbTedasKirilim = rs.getString("ITM_TEDAS");
+            // Fallback: try with just the barcode
+            String fallbackQuery = "SELECT i.DESCRIPTION, i.GROUPCODE, t.DESCRIPTION as TEDAS_DESCRIPTION " +
+                    "FROM AST_ITEMS i " +
+                    "LEFT JOIN AST_ITEMTYPES t ON i.ID = t.ITEMID " +  // Fixed join condition
+                    "WHERE i.CODE = ?";
 
-                    Log.d(TAG, String.format("GetItemInfo Results: malzeme='%s', tipi='%s', tedas='%s'",
-                            dbMalzeme, dbTipi, dbTedasKirilim));
+            try (PreparedStatement stmt = conn.prepareStatement(fallbackQuery)) {
+                stmt.setString(1, barcode.trim());
 
-                    return String.format("%s|%s|%s", dbMalzeme, dbTipi, dbTedasKirilim);
-                } else {
-                    Log.d(TAG, "GetItemInfo: No results found");
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return formatItemInfo(rs);
+                    }
                 }
             }
         } catch (SQLException e) {
@@ -865,40 +920,74 @@ public class ProductionScanActivity extends AppCompatActivity {
         }
         return null;
     }
+    private String formatItemInfo(ResultSet rs) throws SQLException {
+        String dbMalzeme = rs.getString("GROUPCODE");
+        String dbTipi = rs.getString("DESCRIPTION");
+        String dbTedasKirilim = rs.getString("TEDAS_DESCRIPTION");
+
+        // If TEDAS_DESCRIPTION is null, use an empty string
+        dbTedasKirilim = dbTedasKirilim != null ? dbTedasKirilim : "";
+
+        Log.d(TAG, String.format("GetItemInfo Results: malzeme='%s', tipi='%s', tedas='%s'",
+                dbMalzeme, dbTipi, dbTedasKirilim));
+
+        return String.format("%s|%s|%s", dbMalzeme, dbTipi, dbTedasKirilim);
+    }
     private boolean validateTedasCode(String kareKodNoTedas, String tedasKirilim, String barcode) {
-        Log.d(TAG, "Validating TEDAS: KareKodNo part = '" + kareKodNoTedas +
-                "', TedasKirilim = '" + tedasKirilim + "', Barcode = '" + barcode + "'");
+        Log.d(TAG, String.format("Validating: KareKodNo part = '%s', TedasKirilim = '%s', Barcode = '%s'",
+                kareKodNoTedas, tedasKirilim, barcode));
+
         if (!isNetworkAvailable()) {
             showToast("İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.");
             return false;
         }
-        // First check if KAREKODNO TEDAS part matches TEDASKIRILIM
-        if (!kareKodNoTedas.equals(tedasKirilim)) {
+
+        // If both TEDAS values are present, they must match
+        if (kareKodNoTedas != null && !kareKodNoTedas.isEmpty() &&
+                tedasKirilim != null && !tedasKirilim.isEmpty() &&
+                !kareKodNoTedas.equals(tedasKirilim)) {
             Log.d(TAG, "TEDAS codes don't match between KAREKODNO and TEDASKIRILIM");
             return false;
         }
 
-        try (Connection conn = databaseHelper.getAnatoliaSoftConnection();
-             PreparedStatement stmt = conn.prepareStatement(
-                     "SELECT COUNT(*) FROM AST_TEMS_TEDAS WHERE ITM_CODE = ? AND ITM_TEDAS = ?")) {
+        try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
+            // If we have TEDAS information, validate with it
+            if (tedasKirilim != null && !tedasKirilim.isEmpty()) {
+                String query = "SELECT COUNT(*) FROM AST_ITEMS i " +
+                        "JOIN AST_ITEMTYPES t ON i.ID = t.ITEMID " +  // Fixed join condition
+                        "WHERE i.CODE = ? AND t.DESCRIPTION = ?";
 
-            stmt.setString(1, barcode.trim());
-            stmt.setString(2, tedasKirilim.trim());
+                try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                    stmt.setString(1, barcode.trim());
+                    stmt.setString(2, tedasKirilim.trim());
 
-            Log.d(TAG, "TEDAS Validation Query: " + stmt.toString());
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        rs.next();
+                        int count = rs.getInt(1);
+                        Log.d(TAG, "TEDAS Validation Result: count = " + count);
+                        return count > 0;
+                    }
+                }
+            }
 
-            try (ResultSet rs = stmt.executeQuery()) {
-                rs.next();
-                int count = rs.getInt(1);
-                Log.d(TAG, "TEDAS Validation Result: count = " + count);
-                return count > 0;
+            // If no TEDAS info or previous validation failed, just check if the barcode exists
+            String fallbackQuery = "SELECT COUNT(*) FROM AST_ITEMS WHERE CODE = ?";
+
+            try (PreparedStatement stmt = conn.prepareStatement(fallbackQuery)) {
+                stmt.setString(1, barcode.trim());
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    rs.next();
+                    int count = rs.getInt(1);
+                    Log.d(TAG, "Barcode-only Validation Result: count = " + count);
+                    return count > 0;
+                }
             }
         } catch (SQLException e) {
-            Log.e(TAG, "Error validating TEDAS code", e);
+            Log.e(TAG, "Error validating code", e);
             return false;
         }
     }
-
     private String formatManualQRCode(String fullKareKodNo, String tedasPart, String malzeme,
                                       String tipi, String imalYili, String barcode) {
         // Extract TEDAS code (part before ENT) for TEDASKIRILIM
