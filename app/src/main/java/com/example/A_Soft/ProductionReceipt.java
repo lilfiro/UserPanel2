@@ -5,9 +5,9 @@ import java.util.List;
 
 // ProductionReceipt.java
 public class ProductionReceipt {
-    private String receiptNo;
-    private String date;
-    private List<ProductionItem> items;
+    private final String receiptNo;
+    private final String date;
+    private final List<ProductionItem> items;
     private String status; // "DRAFT" or "COMPLETED"
 
     public ProductionReceipt(String receiptNo, String date) {
@@ -18,9 +18,23 @@ public class ProductionReceipt {
     }
 
     // Add getters and setters
-    public String getReceiptNo() { return receiptNo; }
-    public String getDate() { return date; }
-    public List<ProductionItem> getItems() { return items; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public String getReceiptNo() {
+        return receiptNo;
+    }
+
+    public String getDate() {
+        return date;
+    }
+
+    public List<ProductionItem> getItems() {
+        return items;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
 }

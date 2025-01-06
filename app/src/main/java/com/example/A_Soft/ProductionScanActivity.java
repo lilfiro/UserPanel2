@@ -1,5 +1,7 @@
 package com.example.A_Soft;
 
+import static com.example.A_Soft.LoginActivity.SAVED_USERNAME_KEY;
+
 import android.Manifest;
 import android.app.AlertDialog;
 import android.content.ClipData;
@@ -100,16 +102,35 @@ public class ProductionScanActivity extends AppCompatActivity {
     private boolean isProcessing = false;
     private ImageButton cameraStateButton;
     private boolean isCameraActive = false;
-
+    private String creationTime;
     private String currentOperator;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_production_scan);
-        // Get logged in username from SharedPreferences
+
+        // Get creation time and operator from intent
+        creationTime = getIntent().getStringExtra("CREATION_TIME");
+        if (creationTime == null) {
+            creationTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                    .format(new Date());
+        }
+        // Try both SharedPreferences to ensure we get the username
         SharedPreferences loginPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
         currentOperator = loginPrefs.getString("logged_in_username", "");
+
+        if (currentOperator.isEmpty()) {
+            // Fallback to PREFS_NAME if needed
+            SharedPreferences mainPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
+            currentOperator = mainPrefs.getString(SAVED_USERNAME_KEY, "");
+        }
+
+        if (currentOperator.isEmpty()) {
+            // Log error and possibly show message to user
+            Log.e(TAG, "Could not retrieve logged in username");
+            showToast("Kullanıcı bilgisi alınamadı");
+        }
         initializeBasicComponents();
         setupNetworkCallback();
         loadDraftData();
@@ -542,13 +563,25 @@ public class ProductionScanActivity extends AppCompatActivity {
     private long insertProductionSlip(Connection conn) throws SQLException {
         Log.d(TAG, "Inserting slip with receipt number: " + currentReceiptNo);
 
+        // Verify we have a valid operator name
+        if (currentOperator == null || currentOperator.isEmpty()) {
+            // Try to get it one more time
+            SharedPreferences loginPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
+            currentOperator = loginPrefs.getString("logged_in_username", "Unknown User");
+        }
+
         String insertSlipQuery = "INSERT INTO AST_PRODUCTION_SLIPS " +
-                "(STATUS, SLIPDATE, SLIPNR, CREATEDUSER, SLIPTYPE, CREATE_DATE) " +
-                "OUTPUT INSERTED.ID VALUES (1, GETDATE(), ?, ?, 2, GETDATE())";
+                "(STATUS, SLIPDATE, SLIPNR, CREATEDUSERNAME, SLIPTYPE, CREATEDDATE, SLIPTYPEID) " +
+                "OUTPUT INSERTED.ID VALUES (1, ?, ?, ?, 1, GETDATE(), 1)";
 
         try (PreparedStatement stmt = conn.prepareStatement(insertSlipQuery)) {
-            stmt.setString(1, currentReceiptNo);  // SLIPNR
-            stmt.setString(2, currentOperator);   // CREATEDUSER
+            // Convert creation time string to Timestamp
+            Timestamp slipDate = Timestamp.valueOf(creationTime);
+            stmt.setTimestamp(1, slipDate);  // SLIPDATE (creation time from + button)
+            stmt.setString(2, databaseHelper.getLastSlipNumber());  // SLIPNR
+            stmt.setString(3, currentOperator);  // CREATEDUSERNAME
+
+            Log.d(TAG, "Inserting slip with operator: " + currentOperator); // Add logging
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -563,8 +596,8 @@ public class ProductionScanActivity extends AppCompatActivity {
 
     private void batchInsertProductionItems(Connection conn, long slipId) throws SQLException {
         String insertItemsQuery = "INSERT INTO AST_PRODUCTION_ITEMS " +
-                "(KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, SLIPID, UNIT, QUANTITY, ITMID, ENTRYTYPE) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "(KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, SLIPID, UNIT, QUANTITY, ITMID, ENTRYTYPE, SLIPTYPEID, SIGN, CREATE_DATE) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, GETDATE())";
 
         // First, let's get all the item IDs we need in one query for better performance
         Map<String, Long> barcodeToItemId = new HashMap<>();

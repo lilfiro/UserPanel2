@@ -6,7 +6,6 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.Editable;
-import android.text.InputType;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.Gravity;
@@ -49,8 +48,6 @@ import com.google.android.gms.vision.barcode.BarcodeDetector;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -60,8 +57,6 @@ import java.util.regex.Pattern;
 
 import android.content.SharedPreferences;
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import java.lang.reflect.Type;
 
 
 public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
@@ -318,7 +313,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         editor.apply();
 
         Toast.makeText(this, "Taslak kaydedildi", Toast.LENGTH_SHORT).show();
-        //finish();
+        finish();
     }
 
     private void loadDraftData() {
@@ -613,9 +608,6 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         });
     }
 
-    // Update the updateReceiptStatus method
-// In SevkiyatQR_ScreenActivity class, update the updateReceiptStatus method:
-
     private void updateReceiptStatus() {
         executorService.submit(() -> {
             try (Connection connection = databaseHelper.getAnatoliaSoftConnection()) {
@@ -631,6 +623,8 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                         "JOIN " + databaseHelper.getTigerDbItemsTableName("ITEMS") + " ti ON ti.LOGICALREF = sl.ERPITEMID " +
                         "JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " i ON i.CODE = ti.CODE " +
                         "WHERE sp.SLIPNR = ? " +
+                        "AND ti.STGRPCODE <> 'TRAVERS' " +  // Exclude TRAVERS
+                        "AND (i.GROUPCODE2 IS NULL OR i.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
                         "GROUP BY i.CODE" +
                         ") t " +
                         "LEFT JOIN (" +
@@ -641,12 +635,15 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                         "INNER JOIN " + databaseHelper.getTigerDbItemsTableName("ITEMS") + " ITMLOGO ON SHPLN.ERPITEMID=ITMLOGO.LOGICALREF " +
                         "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " ITMAS ON ITMLOGO.CODE=ITMAS.CODE " +
                         "WHERE SHP.STATUS=1 " +
+                        "AND ITMLOGO.STGRPCODE <> 'TRAVERS' " +  // Exclude TRAVERS
+                        "AND (ITMAS.GROUPCODE2 IS NULL OR ITMAS.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
                         "GROUP BY ITMAS.CODE " +
                         "UNION ALL " +
                         "SELECT ITM.CODE, SUM((CASE PRDSLP.SLIPTYPE WHEN 1 THEN 1 WHEN 2 THEN -1 END) * PRDTRN.QUANTITY) as MIKTAR " +
                         "FROM " + databaseHelper.getAnatoliaSoftTableName("AST_PRODUCTION_ITEMS") + " PRDTRN " +
                         "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_PRODUCTION_SLIPS") + " PRDSLP ON PRDTRN.SLIPID=PRDSLP.ID " +
                         "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " ITM ON ITM.CODE=PRDTRN.MALZEME " +
+                        "WHERE (ITM.GROUPCODE2 IS NULL OR ITM.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
                         "GROUP BY ITM.CODE" +
                         ") stock_query " +
                         "GROUP BY CODE" +

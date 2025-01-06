@@ -8,6 +8,7 @@ import android.util.Log;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -21,7 +22,7 @@ import java.util.Locale;
 public class SevkiyatMainActivity extends AppCompatActivity {
 
     private RecyclerView recyclerView;
-    private List<DraftReceipt> receiptList = new ArrayList<>();
+    private final List<DraftReceipt> receiptList = new ArrayList<>();
     private UpcomingSchedulesAdapter adapter;
 
     @Override
@@ -40,7 +41,7 @@ public class SevkiyatMainActivity extends AppCompatActivity {
                 if (!receipt.getStatus().contains("TAMAMLANDI")) {
                     //Intent intent = new Intent(SevkiyatMainActivity.this, SevkiyatInvoiceFragmentActivity.class);
                     Intent intent = new Intent(SevkiyatMainActivity.this, SevkiyatQR_ScreenActivity.class);
-                    intent.putExtra("FICHENO", receipt.getOprFicheNo());
+                    intent.putExtra("FICHENO", receipt.getReceiptNo());
                     startActivity(intent);
                 }
             }
@@ -52,6 +53,13 @@ public class SevkiyatMainActivity extends AppCompatActivity {
 
         // Fetch data using DatabaseHelper
         new FetchDraftReceiptsTask(databaseHelper).execute();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Refresh the data when returning to this activity
+        new FetchDraftReceiptsTask(new DatabaseHelper(this)).execute();
     }
 
     // AsyncTask to fetch data from the database in the background
@@ -74,14 +82,15 @@ public class SevkiyatMainActivity extends AppCompatActivity {
 
                 String query = String.format(
                         "SELECT " +
-                                "SHP.ORGNR AS [Fiş No], " +
-                                "SHP.SLIPNR AS [Fiş Kodu], " +
+                                "SHP.SLIPNR AS [Fiş No], " +  // Changed from ORGNR to SLIPNR
+                                "SHP.ORGNR AS [Fiş Kodu], " +  // Kept ORGNR as Fiş Kodu
                                 "STUFF((SELECT ',' + CAST(QUANTITY AS VARCHAR) " +
                                 "       FROM %s INNER_SHPL " +
                                 "       WHERE INNER_SHPL.SHIPPLANID = SHP.ID " +
                                 "       FOR XML PATH('')), 1, 1, '') AS [Miktar], " +
                                 "SHP.SLIPDATE AS [Tarih], " +
                                 "AC.ARAC_PLAKA AS [Araç Plaka], " +
+                                "AC.ARAC_KULLANICISI AS [Araç Kullanıcısı], " +  // Added car user
                                 "SHP.STATUS AS [Durum], " +
                                 "SUM(SHPL.QUANTITY) AS [Total Quantity], " +
                                 "SUM(SHPL.TOTALWEIGHT) AS [Total Weight] " +
@@ -89,9 +98,9 @@ public class SevkiyatMainActivity extends AppCompatActivity {
                                 "INNER JOIN %s SHPL ON SHP.ID = SHPL.SHIPPLANID " +
                                 "LEFT JOIN %s AC ON AC.ARAC_KODU = SHP.CARID " +
                                 "LEFT JOIN %s IT ON IT.LOGICALREF = SHPL.ERPITEMID " +
-                                "WHERE SHP.STATUS IN (0, 1) " +  // Modified this line to show both statuses
-                                "GROUP BY SHP.ID, SHP.STATUS, AC.ARAC_PLAKA, SHP.SLIPDATE, SHP.SLIPNR, SHP.ORGNR " +
-                                "ORDER BY SHP.STATUS ASC, SHP.SLIPDATE DESC",  // Added ORDER BY to show active first, then by date
+                                "WHERE SHP.STATUS IN (0, 1) " +
+                                "GROUP BY SHP.ID, SHP.STATUS, AC.ARAC_PLAKA, AC.ARAC_KULLANICISI, SHP.SLIPDATE, SHP.SLIPNR, SHP.ORGNR " +  // Added ARAC_KULLANICISI to GROUP BY
+                                "ORDER BY SHP.STATUS ASC, SHP.SLIPDATE DESC",
                         anatoliaSoftShipPlanLineTable,
                         anatoliaSoftShipPlanTable,
                         anatoliaSoftShipPlanLineTable,
@@ -105,9 +114,10 @@ public class SevkiyatMainActivity extends AppCompatActivity {
                     while (resultSet.next()) {
                         String date = resultSet.getString("Tarih");
                         String formattedDate = formatDate(date);
-                        String receiptNo = resultSet.getString("Fiş No");
-                        String ficheNo = resultSet.getString("Fiş Kodu");
+                        String receiptNo = resultSet.getString("Fiş No");  // This will now get SLIPNR
+                        String ficheNo = resultSet.getString("Fiş Kodu");  // This will now get ORGNR
                         String carPlate = resultSet.getString("Araç Plaka");
+                        String carUser = resultSet.getString("Araç Kullanıcısı");  // Get car user
                         String amount = resultSet.getString("Miktar");
                         String status = resultSet.getInt("Durum") == 0 ? "DEVAM EDİYOR" : "TAMAMLANDI";
 
@@ -117,6 +127,7 @@ public class SevkiyatMainActivity extends AppCompatActivity {
                                 status,
                                 ficheNo,
                                 carPlate,
+                                carUser,  // Added car user
                                 receiptNo
                         );
 
@@ -128,7 +139,6 @@ public class SevkiyatMainActivity extends AppCompatActivity {
             }
             return drafts;
         }
-
 
 
         @Override
@@ -151,11 +161,5 @@ public class SevkiyatMainActivity extends AppCompatActivity {
                 return date; // Return original date if parsing fails
             }
         }
-    }
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // Refresh the data when returning to this activity
-        new FetchDraftReceiptsTask(new DatabaseHelper(this)).execute();
     }
 }

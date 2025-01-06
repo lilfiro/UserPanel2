@@ -11,6 +11,8 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class DatabaseHelper {
     // SharedPreferences key constants
@@ -123,35 +125,67 @@ public class DatabaseHelper {
     // User check method with dynamic connection (kept from previous implementation)
     public void checkUser(String username, String password, OnUserCheckListener listener) {
         new Thread(() -> {
-            boolean userExists = performCheckUser(username, password);
-            handler.post(() -> {
-                if (listener != null) {
-                    listener.onUserCheck(userExists);
-                }
-            });
+            performCheckUser(username, password, listener);
         }).start();
     }
 
     // Perform user check with dynamic connection
-    private boolean performCheckUser(String checkUsername, String checkPassword) {
+    private void performCheckUser(String checkUsername, String checkPassword, OnUserCheckListener listener) {
         try (Connection connection = getAnatoliaSoftConnection()) {
-            // Dynamically build the SQL query based on the current configuration
-            String databaseName = getAnatoliaSoftDatabaseName();  // Dynamically use the configured DB name
-            String tableName = "dbo.A_CAPIUSER";  // Can also make this dynamic if needed (e.g., based on configuration)
+            String databaseName = getAnatoliaSoftDatabaseName();
 
-            String sql = String.format("SELECT * FROM %s.%s WHERE LOGOUSERNAME = ? AND LOGOUSERPASS = ?", databaseName, tableName);
+            String sql = String.format(
+                    "SELECT DISTINCT m.MENUREF FROM %s.dbo.A_CAPIUSER u " +
+                            "JOIN %s.dbo.A_CAPIRIGHT r ON u.NR = r.USERNR " +
+                            "JOIN %s.dbo.A_MODULES m ON r.MENUREF = m.MENUREF " +
+                            "WHERE u.LOGOUSERNAME = ? AND u.LOGOUSERPASS = ?",
+                    databaseName, databaseName, databaseName);
 
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, checkUsername);
                 statement.setString(2, checkPassword);
+
                 try (ResultSet resultSet = statement.executeQuery()) {
-                    return resultSet.next();
+                    List<Integer> moduleRights = new ArrayList<>();
+                    boolean hasResults = false;
+
+                    while (resultSet.next()) {
+                        hasResults = true;
+                        moduleRights.add(resultSet.getInt("MENUREF"));
+                    }
+
+                    boolean finalHasResults = hasResults;
+                    handler.post(() -> listener.onUserCheck(finalHasResults, moduleRights));
                 }
             }
         } catch (SQLException e) {
             Log.e("DatabaseHelper", "Error checking user", e);
-            return false;
+            handler.post(() -> listener.onUserCheck(false, new ArrayList<>()));
         }
+    }
+
+    public interface OnUserCheckListener {
+        void onUserCheck(boolean userExists, List<Integer> moduleRights);
+    }
+    public String getLastSlipNumber() {
+        String lastSlipNumber = "00000";
+        String query = "SELECT TOP 1 SLIPNR FROM AST_PRODUCTION_SLIPS ORDER BY CAST(SLIPNR AS bigint) DESC";
+
+        try (Connection conn = getAnatoliaSoftConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    lastSlipNumber = rs.getString("SLIPNR");
+                }
+            }
+        } catch (SQLException e) {
+            Log.e("DatabaseHelper", "Error getting last slip number", e);
+        }
+
+        // Generate next number with leading zeros
+        int nextNumber = Integer.parseInt(lastSlipNumber) + 1;
+        return String.format("%05d", nextNumber);
     }
 
     // Getters for configuration values
@@ -164,7 +198,5 @@ public class DatabaseHelper {
     public String getPeriodNumber() { return periodNumber; }
     public String getPassword() { return password; }
 
-    public interface OnUserCheckListener {
-        void onUserCheck(boolean userExists);
-    }
+
 }

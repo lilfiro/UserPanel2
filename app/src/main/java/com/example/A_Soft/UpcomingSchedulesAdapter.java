@@ -1,5 +1,6 @@
 package com.example.A_Soft;
 
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -40,8 +41,8 @@ public class UpcomingSchedulesAdapter extends RecyclerView.Adapter<UpcomingSched
         return receiptList.size();
     }
 
-    public class ViewHolder extends RecyclerView.ViewHolder {
-        private TextView dateTextView, receiptNoTextView, materialCodeTextView, materialNameTextView, amountTextView, statusTextView, carPlateTextView;
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        private TextView dateTextView, receiptNoTextView, statusTextView, carPlateTextView, carUserTextView;
 
         public ViewHolder(View itemView) {
             super(itemView);
@@ -49,26 +50,30 @@ public class UpcomingSchedulesAdapter extends RecyclerView.Adapter<UpcomingSched
             receiptNoTextView = itemView.findViewById(R.id.receiptNoTextView);
             statusTextView = itemView.findViewById(R.id.statusTextView);
             carPlateTextView = itemView.findViewById(R.id.carPlateTextView);
+            carUserTextView = itemView.findViewById(R.id.carUserTextView);  // Initialize carUserTextView
         }
 
         public void bind(final DraftReceipt receipt, final OnItemClickListener listener) {
+            Log.d("UpcomingSchedulesAdapter", "Receipt status: " + receipt.getStatus() +
+                    " for receipt: " + receipt.getReceiptNo());
             statusTextView.setText(receipt.getStatus());
             dateTextView.setText("Tarih: " + receipt.getDate());
             receiptNoTextView.setText("Fiş No: " + receipt.getReceiptNo());
             carPlateTextView.setText("Araç Plaka: " + receipt.getCarPlate());
+            carUserTextView.setText("Sürücü: " + receipt.getCarUser());  // Display car user
 
-            // Disable clicking for completed invoices
+            // Reset the view's state first
+            itemView.setClickable(true);
+            itemView.setEnabled(true);
+            itemView.setAlpha(1.0f);
+
+            // Check status and update accordingly
             if (receipt.getStatus() != null && receipt.getStatus().contains("TAMAMLANDI")) {
                 itemView.setClickable(false);
                 itemView.setEnabled(false);
-                itemView.setAlpha(0.5f); // Optional: make it visually less prominent
+                itemView.setAlpha(0.5f);
             } else {
-                itemView.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        listener.onItemClick(receipt);
-                    }
-                });
+                itemView.setOnClickListener(v -> listener.onItemClick(receipt));
             }
         }
     }

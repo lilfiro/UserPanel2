@@ -1,7 +1,6 @@
 package com.example.A_Soft;
 
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -12,18 +11,12 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.firebase.crashlytics.buildtools.reloc.com.google.common.reflect.TypeToken;
-import com.google.gson.Gson;
 
-import java.lang.reflect.Type;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
-public class UretimMainActivity extends AppCompatActivity {
+public class ProductionMainActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private ProductionReceiptAdapter adapter;
     private ProductionReceiptManager receiptManager;
@@ -63,15 +56,21 @@ public class UretimMainActivity extends AppCompatActivity {
     private void setupAddButton() {
         addButton = findViewById(R.id.addReceiptButton);
         addButton.setOnClickListener(v -> {
+            // Get current operator from SharedPreferences
+            SharedPreferences loginPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
+            String currentOperator = loginPrefs.getString("logged_in_username", "");
+
             String newReceiptNo = receiptManager.generateNewReceiptNo();
-            String currentDate = new SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+            String creationTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                     .format(new Date());
 
-            ProductionReceipt newReceipt = new ProductionReceipt(newReceiptNo, currentDate);
+            ProductionReceipt newReceipt = new ProductionReceipt(newReceiptNo, creationTime);
             receiptManager.saveReceipt(newReceipt);
 
             Intent intent = new Intent(this, ProductionScanActivity.class);
             intent.putExtra("RECEIPT_NO", newReceiptNo);
+            intent.putExtra("CREATION_TIME", creationTime);
+            intent.putExtra("OPERATOR", currentOperator);
             startActivity(intent);
         });
     }
