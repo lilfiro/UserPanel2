@@ -93,6 +93,9 @@ public class LoginActivity extends AppCompatActivity {
 
                             editor.apply();
 
+                            // Add this line to save the login day
+                            saveLoginDay();
+
                             navigateToHome();
                         } else {
                             Toast.makeText(LoginActivity.this, "Geçersiz Giriş", Toast.LENGTH_SHORT).show();

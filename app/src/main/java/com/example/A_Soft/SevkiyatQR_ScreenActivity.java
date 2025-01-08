@@ -612,6 +612,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         executorService.submit(() -> {
             try (Connection connection = databaseHelper.getAnatoliaSoftConnection()) {
                 // First check stock levels
+                // In updateReceiptStatus() method, update the stockQuery:
                 String stockQuery = "SELECT " +
                         "t.CODE, " +
                         "t.TOTAL_QUANTITY AS PLANNED_QUANTITY, " +
@@ -623,7 +624,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                         "JOIN " + databaseHelper.getTigerDbItemsTableName("ITEMS") + " ti ON ti.LOGICALREF = sl.ERPITEMID " +
                         "JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " i ON i.CODE = ti.CODE " +
                         "WHERE sp.SLIPNR = ? " +
-                        "AND ti.STGRPCODE <> 'TRAVERS' " +  // Exclude TRAVERS
+                        "AND i.GROUPCODE = 'DIREK' " +  // Only include DIREK items
                         "AND (i.GROUPCODE2 IS NULL OR i.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
                         "GROUP BY i.CODE" +
                         ") t " +
@@ -635,7 +636,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                         "INNER JOIN " + databaseHelper.getTigerDbItemsTableName("ITEMS") + " ITMLOGO ON SHPLN.ERPITEMID=ITMLOGO.LOGICALREF " +
                         "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " ITMAS ON ITMLOGO.CODE=ITMAS.CODE " +
                         "WHERE SHP.STATUS=1 " +
-                        "AND ITMLOGO.STGRPCODE <> 'TRAVERS' " +  // Exclude TRAVERS
+                        "AND ITMAS.GROUPCODE = 'DIREK' " +  // Only include DIREK items
                         "AND (ITMAS.GROUPCODE2 IS NULL OR ITMAS.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
                         "GROUP BY ITMAS.CODE " +
                         "UNION ALL " +
@@ -643,7 +644,8 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                         "FROM " + databaseHelper.getAnatoliaSoftTableName("AST_PRODUCTION_ITEMS") + " PRDTRN " +
                         "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_PRODUCTION_SLIPS") + " PRDSLP ON PRDTRN.SLIPID=PRDSLP.ID " +
                         "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " ITM ON ITM.CODE=PRDTRN.MALZEME " +
-                        "WHERE (ITM.GROUPCODE2 IS NULL OR ITM.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
+                        "WHERE ITM.GROUPCODE = 'DIREK' " +  // Only include DIREK items
+                        "AND (ITM.GROUPCODE2 IS NULL OR ITM.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
                         "GROUP BY ITM.CODE" +
                         ") stock_query " +
                         "GROUP BY CODE" +
@@ -731,11 +733,11 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                                 "    FROM %s SHP " +
                                 "    INNER JOIN %s SHPL ON SHP.ID = SHPL.SHIPPLANID " +
                                 "    INNER JOIN %s IT ON IT.LOGICALREF = SHPL.ERPITEMID " +
-                                "    LEFT JOIN %s AST_IT ON AST_IT.CODE = IT.CODE " +
+                                "    INNER JOIN %s AST_IT ON AST_IT.CODE = IT.CODE " +  // Changed to INNER JOIN
                                 "    WHERE SHP.SLIPNR = ? " +
                                 "    AND SHP.STATUS = 0 " +
-                                "    AND IT.STGRPCODE <> 'TRAVERS' " +
-                                "    AND (AST_IT.GROUPCODE2 IS NULL OR AST_IT.GROUPCODE2 <> 'DIREKDEM') " +
+                                "    AND AST_IT.GROUPCODE = 'DIREK' " +  // Only include DIREK items
+                                "    AND (AST_IT.GROUPCODE2 IS NULL OR AST_IT.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
                                 ")" +
                                 "SELECT " +
                                 "    ItemName AS [Malzeme Adı], " +
@@ -785,7 +787,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             headerRow.addView(headerScanned);
             tableLayout.addView(headerRow);
 
-            // Add rows for non-TRAVERS items
+            // Add rows for non-travers items
             for (DraftReceipt detail : details) {
                 TableRow row = new TableRow(SevkiyatQR_ScreenActivity.this);
 
@@ -943,10 +945,10 @@ class ReceiptItemManager {
                             "    FROM %s SHP " +
                             "    INNER JOIN %s SHPL ON SHP.ID = SHPL.SHIPPLANID " +
                             "    INNER JOIN %s IT ON IT.LOGICALREF = SHPL.ERPITEMID " +
-                            "    LEFT JOIN %s AST_IT ON AST_IT.CODE = IT.CODE " +  // Join with AST_ITEMS
+                            "    INNER JOIN %s AST_IT ON AST_IT.CODE = IT.CODE " +  // Changed to INNER JOIN
                             "    WHERE SHP.SLIPNR = ? " +
                             "    AND SHP.STATUS = 0 " +
-                            "    AND IT.STGRPCODE <> 'TRAVERS' " +
+                            "    AND AST_IT.GROUPCODE = 'DIREK' " +  // Only include DIREK items
                             "    AND (AST_IT.GROUPCODE2 IS NULL OR AST_IT.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
                             ")" +
                             "SELECT " +
