@@ -59,6 +59,7 @@
             android:paddingHorizontal="16dp">
 
             <LinearLayout
+                android:id="@+id/camera_state_grid"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -114,6 +115,7 @@
 
         <!-- Main Buttons Grid -->
         <LinearLayout
+            android:id="@+id/main_buttons_grid"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
@@ -167,6 +169,7 @@
 
         <!-- Bottom Buttons -->
         <LinearLayout
+            android:id="@+id/bottom_buttons_grid"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"

@@ -54,27 +54,21 @@ public class UpcomingSchedulesAdapter extends RecyclerView.Adapter<UpcomingSched
         }
 
         public void bind(final DraftReceipt receipt, final OnItemClickListener listener) {
-            Log.d("UpcomingSchedulesAdapter", "Receipt status: " + receipt.getStatus() +
-                    " for receipt: " + receipt.getReceiptNo());
             statusTextView.setText(receipt.getStatus());
             dateTextView.setText("Tarih: " + receipt.getDate());
             receiptNoTextView.setText("Fiş No: " + receipt.getReceiptNo());
             carPlateTextView.setText("Araç Plaka: " + receipt.getCarPlate());
-            carUserTextView.setText("Sürücü: " + receipt.getCarUser());  // Display car user
+            carUserTextView.setText("Sürücü: " + receipt.getCarUser());
 
-            // Reset the view's state first
-            itemView.setClickable(true);
-            itemView.setEnabled(true);
-            itemView.setAlpha(1.0f);
-
-            // Check status and update accordingly
+            // Always make item clickable, but visual feedback for completed items
             if (receipt.getStatus() != null && receipt.getStatus().contains("TAMAMLANDI")) {
-                itemView.setClickable(false);
-                itemView.setEnabled(false);
-                itemView.setAlpha(0.5f);
+                itemView.setAlpha(0.5f);  // Visual indicator that it's completed
             } else {
-                itemView.setOnClickListener(v -> listener.onItemClick(receipt));
+                itemView.setAlpha(1.0f);
             }
+
+            // Set click listener for all items
+            itemView.setOnClickListener(v -> listener.onItemClick(receipt));
         }
     }
 }

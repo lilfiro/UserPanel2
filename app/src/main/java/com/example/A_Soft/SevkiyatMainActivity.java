@@ -30,28 +30,19 @@ public class SevkiyatMainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.sevkiyat_giris);
 
-        recyclerView = findViewById(R.id.upcomingSchedulesRecyclerView); // Ensure this matches your layout ID
+        recyclerView = findViewById(R.id.upcomingSchedulesRecyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        // Initialize adapter
-        adapter = new UpcomingSchedulesAdapter(receiptList, new UpcomingSchedulesAdapter.OnItemClickListener() {
-            @Override
-            public void onItemClick(DraftReceipt receipt) {
-                // Only navigate if the receipt is not completed
-                if (!receipt.getStatus().contains("TAMAMLANDI")) {
-                    //Intent intent = new Intent(SevkiyatMainActivity.this, SevkiyatInvoiceFragmentActivity.class);
-                    Intent intent = new Intent(SevkiyatMainActivity.this, SevkiyatQR_ScreenActivity.class);
-                    intent.putExtra("FICHENO", receipt.getReceiptNo());
-                    startActivity(intent);
-                }
-            }
+        // Initialize adapter with modified click behavior
+        adapter = new UpcomingSchedulesAdapter(receiptList, receipt -> {
+            Intent intent = new Intent(SevkiyatMainActivity.this, SevkiyatQR_ScreenActivity.class);
+            intent.putExtra("FICHENO", receipt.getReceiptNo());
+            intent.putExtra("INSPECT_MODE", receipt.getStatus().contains("TAMAMLANDI"));
+            startActivity(intent);
         });
 
         recyclerView.setAdapter(adapter);
-        // Initialize DatabaseHelper
         DatabaseHelper databaseHelper = new DatabaseHelper(this);
-
-        // Fetch data using DatabaseHelper
         new FetchDraftReceiptsTask(databaseHelper).execute();
     }
 
