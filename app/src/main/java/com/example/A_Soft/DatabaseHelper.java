@@ -167,25 +167,38 @@ public class DatabaseHelper {
     public interface OnUserCheckListener {
         void onUserCheck(boolean userExists, List<Integer> moduleRights);
     }
-    public String getLastSlipNumber() {
-        String lastSlipNumber = "00000";
-        String query = "SELECT TOP 1 SLIPNR FROM AST_PRODUCTION_SLIPS ORDER BY CAST(SLIPNR AS bigint) DESC";
-
+    public int getLastSlipNumber() {
+        String query = "SELECT LASTNR, LENFICHENR FROM A_ADOCNUM WHERE LOGICALREF = 5";
         try (Connection conn = getAnatoliaSoftConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
-
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    lastSlipNumber = rs.getString("SLIPNR");
+                    return rs.getInt("LASTNR");
                 }
             }
         } catch (SQLException e) {
             Log.e("DatabaseHelper", "Error getting last slip number", e);
         }
+        return 0;
+    }
 
-        // Generate next number with leading zeros
-        int nextNumber = Integer.parseInt(lastSlipNumber) + 1;
-        return String.format("%05d", nextNumber);
+    public String formatSlipNumber(int number, int length) {
+        return String.format("%0" + length + "d", number);
+    }
+
+    public int getSlipNumberLength() {
+        String query = "SELECT LENFICHENR FROM A_ADOCNUM WHERE LOGICALREF = 5";
+        try (Connection conn = getAnatoliaSoftConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("LENFICHENR");
+                }
+            }
+        } catch (SQLException e) {
+            Log.e("DatabaseHelper", "Error getting slip number length", e);
+        }
+        return 8; // Default length
     }
 
     // Getters for configuration values

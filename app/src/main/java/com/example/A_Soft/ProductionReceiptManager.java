@@ -24,12 +24,23 @@ public class ProductionReceiptManager {
     }
 
     public String generateNewReceiptNo() {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        int count = prefs.getInt(RECEIPT_COUNT_KEY, 0) + 1;
-        prefs.edit().putInt(RECEIPT_COUNT_KEY, count).apply();
-        return String.format("%05d", count);
-    }
+        DatabaseHelper dbHelper = new DatabaseHelper(context);
+        int length = dbHelper.getSlipNumberLength();
 
+        List<ProductionReceipt> existingReceipts = getAllReceipts();
+        if (existingReceipts.isEmpty()) {
+            int dbLastNumber = dbHelper.getLastSlipNumber();
+            return dbHelper.formatSlipNumber(dbLastNumber + 1, length);
+        }
+
+        // Find max receipt number from existing drafts
+        int maxNumber = existingReceipts.stream()
+                .mapToInt(r -> Integer.parseInt(r.getReceiptNo()))
+                .max()
+                .orElse(0);
+
+        return dbHelper.formatSlipNumber(maxNumber + 1, length);
+    }
     public void saveReceipt(ProductionReceipt receipt) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         Map<String, String> receipts = getReceiptsMap(prefs);

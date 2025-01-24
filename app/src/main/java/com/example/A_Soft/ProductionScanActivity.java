@@ -561,8 +561,14 @@ public class ProductionScanActivity extends AppCompatActivity {
         }
     }
     private long insertProductionSlip(Connection conn) throws SQLException {
-        Log.d(TAG, "Inserting slip with receipt number: " + currentReceiptNo);
-
+        // Update LASTNR in database
+        int maxSlipNumber = getMaxSlipNumber(conn);
+        // Use this number + 1 for the new slip and update LASTNR
+        String updateLastNr = "UPDATE A_ADOCNUM SET LASTNR = ? WHERE LOGICALREF = 5";
+        try (PreparedStatement updateStmt = conn.prepareStatement(updateLastNr)) {
+            updateStmt.setInt(1, maxSlipNumber + 1);
+            updateStmt.executeUpdate();
+        }
         // Verify we have a valid operator name
         if (currentOperator == null || currentOperator.isEmpty()) {
             // Try to get it one more time
@@ -571,29 +577,45 @@ public class ProductionScanActivity extends AppCompatActivity {
         }
 
         String insertSlipQuery = "INSERT INTO AST_PRODUCTION_SLIPS " +
-                "(STATUS, SLIPDATE, SLIPNR, CREATEDUSERNAME, SLIPTYPE, CREATEDDATE, SLIPTYPEID) " +
-                "OUTPUT INSERTED.ID VALUES (1, ?, ?, ?, 1, GETDATE(), 1)";
+                "(STATUS, SLIPDATE, SLIPNR, CREATEDUSERNAME, SLIPTYPE, CREATEDDATE, SLIPTYPEID, INTEGRATEDLOGO, DOCNUMBER) " +
+                "OUTPUT INSERTED.ID VALUES (1, ?, ?, ?, 1, GETDATE(), 1, 0, ?)";
 
         try (PreparedStatement stmt = conn.prepareStatement(insertSlipQuery)) {
-            // Convert creation time string to Timestamp
-            Timestamp slipDate = Timestamp.valueOf(creationTime);
-            stmt.setTimestamp(1, slipDate);  // SLIPDATE (creation time from + button)
-            stmt.setString(2, databaseHelper.getLastSlipNumber());  // SLIPNR
-            stmt.setString(3, currentOperator);  // CREATEDUSERNAME
-
-            Log.d(TAG, "Inserting slip with operator: " + currentOperator); // Add logging
+            stmt.setTimestamp(1, Timestamp.valueOf(creationTime));
+            stmt.setString(2, currentReceiptNo);
+            stmt.setString(3, currentOperator);
+            stmt.setString(4, "");
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    long id = rs.getLong("ID");
-                    Log.d(TAG, "Created slip record with ID: " + id + " for receipt: " + currentReceiptNo);
-                    return id;
+                    return rs.getLong("ID");
                 }
                 throw new SQLException("Failed to get slip ID");
             }
         }
     }
+    private int getMaxSlipNumber(Connection conn) throws SQLException {
+        int dbMaxNumber = 0;
+        int draftsMaxNumber = 0;
 
+        // Get max from DB
+        String query = "SELECT MAX(CAST(SLIPNR as INT)) as MaxSlip FROM AST_PRODUCTION_SLIPS";
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    dbMaxNumber = rs.getInt("MaxSlip");
+                }
+            }
+        }
+
+        // Get max from drafts
+        draftsMaxNumber = receiptManager.getAllReceipts().stream()
+                .mapToInt(r -> Integer.parseInt(r.getReceiptNo()))
+                .max()
+                .orElse(0);
+
+        return Math.max(dbMaxNumber, draftsMaxNumber);
+    }
     private void batchInsertProductionItems(Connection conn, long slipId) throws SQLException {
         String insertItemsQuery = "INSERT INTO AST_PRODUCTION_ITEMS " +
                 "(KAREKODNO, TEDASKIRILIM, MARKA, MALZEME, TIPI, IMALYILI, BARKOD, SLIPID, UNIT, QUANTITY, ITMID, ENTRYTYPE, SLIPTYPEID, SIGN, CREATE_DATE) " +

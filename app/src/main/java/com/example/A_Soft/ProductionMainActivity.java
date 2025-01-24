@@ -1,8 +1,10 @@
 package com.example.A_Soft;
 
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.AsyncTask;
 import android.os.Bundle;
 
 
@@ -53,25 +55,37 @@ public class ProductionMainActivity extends AppCompatActivity {
         recyclerView.setAdapter(adapter);
     }
 
+    @SuppressLint("StaticFieldLeak")
     private void setupAddButton() {
         addButton = findViewById(R.id.addReceiptButton);
         addButton.setOnClickListener(v -> {
-            // Get current operator from SharedPreferences
-            SharedPreferences loginPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
-            String currentOperator = loginPrefs.getString("logged_in_username", "");
+            new AsyncTask<Void, Void, String>() {
+                @Override
+                protected String doInBackground(Void... voids) {
+                    return receiptManager.generateNewReceiptNo();
+                }
 
-            String newReceiptNo = receiptManager.generateNewReceiptNo();
-            String creationTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-                    .format(new Date());
+                @Override
+                protected void onPostExecute(String newReceiptNo) {
+                    // Get current operator from SharedPreferences
+                    SharedPreferences loginPrefs = getSharedPreferences("LoginPrefs", MODE_PRIVATE);
+                    String currentOperator = loginPrefs.getString("logged_in_username", "");
 
-            ProductionReceipt newReceipt = new ProductionReceipt(newReceiptNo, creationTime);
-            receiptManager.saveReceipt(newReceipt);
+                    String creationTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                            .format(new Date());
 
-            Intent intent = new Intent(this, ProductionScanActivity.class);
-            intent.putExtra("RECEIPT_NO", newReceiptNo);
-            intent.putExtra("CREATION_TIME", creationTime);
-            intent.putExtra("OPERATOR", currentOperator);
-            startActivity(intent);
+                    // Create and save the new receipt
+                    ProductionReceipt newReceipt = new ProductionReceipt(newReceiptNo, creationTime);
+                    receiptManager.saveReceipt(newReceipt);
+
+                    // Use YourCurrentActivity.this instead of ProductionScanActivity.this
+                    Intent intent = new Intent(ProductionMainActivity.this, ProductionScanActivity.class);
+                    intent.putExtra("RECEIPT_NO", newReceiptNo);
+                    intent.putExtra("CREATION_TIME", creationTime);
+                    intent.putExtra("OPERATOR", currentOperator);
+                    startActivity(intent);
+                }
+            }.execute();
         });
     }
 
