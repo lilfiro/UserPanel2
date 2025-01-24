@@ -561,14 +561,21 @@ public class ProductionScanActivity extends AppCompatActivity {
         }
     }
     private long insertProductionSlip(Connection conn) throws SQLException {
-        // Update LASTNR in database
-        int maxSlipNumber = getMaxSlipNumber(conn);
-        // Use this number + 1 for the new slip and update LASTNR
+        int currentSlipNumber = Integer.parseInt(currentReceiptNo);
+        DatabaseHelper dbHelper = new DatabaseHelper(this);
+        int lastDbNumber = dbHelper.getLastSlipNumber();
+        int length = dbHelper.getSlipNumberLength();
+
+        int numberToUse = Math.max(currentSlipNumber, lastDbNumber);
+
+        // Update LASTNR
         String updateLastNr = "UPDATE A_ADOCNUM SET LASTNR = ? WHERE LOGICALREF = 5";
         try (PreparedStatement updateStmt = conn.prepareStatement(updateLastNr)) {
-            updateStmt.setInt(1, maxSlipNumber + 1);
+            updateStmt.setInt(1, numberToUse + 1);
             updateStmt.executeUpdate();
         }
+
+        String formattedNumber = String.format("%0" + length + "d", numberToUse);
         // Verify we have a valid operator name
         if (currentOperator == null || currentOperator.isEmpty()) {
             // Try to get it one more time
@@ -582,7 +589,7 @@ public class ProductionScanActivity extends AppCompatActivity {
 
         try (PreparedStatement stmt = conn.prepareStatement(insertSlipQuery)) {
             stmt.setTimestamp(1, Timestamp.valueOf(creationTime));
-            stmt.setString(2, currentReceiptNo);
+            stmt.setString(2, formattedNumber);
             stmt.setString(3, currentOperator);
             stmt.setString(4, "");
 
@@ -598,8 +605,8 @@ public class ProductionScanActivity extends AppCompatActivity {
         int dbMaxNumber = 0;
         int draftsMaxNumber = 0;
 
-        // Get max from DB
-        String query = "SELECT MAX(CAST(SLIPNR as INT)) as MaxSlip FROM AST_PRODUCTION_SLIPS";
+        // Get max numeric SLIPNR from DB
+        String query = "SELECT MAX(CAST(SLIPNR as INT)) as MaxSlip FROM AST_PRODUCTION_SLIPS WHERE SLIPNR NOT LIKE '%[^0-9]%'";
         try (PreparedStatement stmt = conn.prepareStatement(query)) {
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -610,7 +617,9 @@ public class ProductionScanActivity extends AppCompatActivity {
 
         // Get max from drafts
         draftsMaxNumber = receiptManager.getAllReceipts().stream()
-                .mapToInt(r -> Integer.parseInt(r.getReceiptNo()))
+                .map(r -> r.getReceiptNo())
+                .filter(no -> no.matches("\\d+")) // Only numeric slip numbers
+                .mapToInt(Integer::parseInt)
                 .max()
                 .orElse(0);
 

@@ -30,7 +30,7 @@ public class ProductionReceiptManager {
         List<ProductionReceipt> existingReceipts = getAllReceipts();
         if (existingReceipts.isEmpty()) {
             int dbLastNumber = dbHelper.getLastSlipNumber();
-            return dbHelper.formatSlipNumber(dbLastNumber + 1, length);
+            return dbHelper.formatSlipNumber(dbLastNumber, length);
         }
 
         // Find max receipt number from existing drafts
