@@ -14,7 +14,6 @@ public class DraftReceipt {
         this.carPlate = null;
         this.carUser = null;
     }
-
     public DraftReceipt(String date, String amount, String status, String oprFicheNo,
                         String carPlate, String carUser, String receiptNo) {
         this.date = date;

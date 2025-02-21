@@ -319,7 +319,20 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     }
 
     private boolean isValidQRFormat(String qrCode) {
-        return qrCode != null && qrCode.contains("KAREKODNO_") && qrCode.contains("||");
+        if (qrCode == null) return false;
+
+        // Check for common required fields
+        boolean hasBasicFormat = qrCode.contains("KAREKODNO_") &&
+                qrCode.contains("MARKA_ENT") &&
+                qrCode.contains("MALZEME_BETON");
+
+        if (!hasBasicFormat) return false;
+
+        // Check for either TCDD or TEDASKIRILIM format
+        boolean isTCDD = qrCode.contains("|TCDD|");
+        boolean isTEDAS = qrCode.contains("TEDASKIRILIM_");
+
+        return isTCDD || isTEDAS;
     }
 
     private void handleScanResult(ReceiptItemManager.ScanResult result, String scannedData) {
@@ -661,7 +674,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                         "JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " i ON i.CODE = ti.CODE " +
                         "WHERE sp.SLIPNR = ? " +
                         "AND i.GROUPCODE = 'DIREK' " +  // Only include DIREK items
-                        "AND (i.GROUPCODE2 IS NULL OR i.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
+
                         "GROUP BY i.CODE" +
                         ") t " +
                         "LEFT JOIN (" +
@@ -673,7 +686,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                         "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " ITMAS ON ITMLOGO.CODE=ITMAS.CODE " +
                         "WHERE SHP.STATUS=1 " +
                         "AND ITMAS.GROUPCODE = 'DIREK' " +  // Only include DIREK items
-                        "AND (ITMAS.GROUPCODE2 IS NULL OR ITMAS.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
+
                         "GROUP BY ITMAS.CODE " +
                         "UNION ALL " +
                         "SELECT ITM.CODE, SUM((CASE PRDSLP.SLIPTYPE WHEN 1 THEN 1 WHEN 2 THEN -1 END) * PRDTRN.QUANTITY) as MIKTAR " +
@@ -681,7 +694,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                         "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_PRODUCTION_SLIPS") + " PRDSLP ON PRDTRN.SLIPID=PRDSLP.ID " +
                         "INNER JOIN " + databaseHelper.getAnatoliaSoftTableName("AST_ITEMS") + " ITM ON ITM.CODE=PRDTRN.MALZEME " +
                         "WHERE ITM.GROUPCODE = 'DIREK' " +  // Only include DIREK items
-                        "AND (ITM.GROUPCODE2 IS NULL OR ITM.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
+
                         "GROUP BY ITM.CODE" +
                         ") stock_query " +
                         "GROUP BY CODE" +
@@ -774,7 +787,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                     }
                 }
 
-                // Main query to get items
+                // Main query to get items - Removed DIREKDEM filter
                 String query = String.format(
                         "WITH FilteredItems AS (" +
                                 "    SELECT " +
@@ -786,7 +799,6 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                                 "    INNER JOIN %s AST_IT ON AST_IT.CODE = IT.CODE " +
                                 "    WHERE SHP.SLIPNR = ? " +
                                 "    AND AST_IT.GROUPCODE = 'DIREK' " +
-                                "    AND (AST_IT.GROUPCODE2 IS NULL OR AST_IT.GROUPCODE2 <> 'DIREKDEM') " +
                                 ") " +
                                 "SELECT " +
                                 "    ItemName AS [Malzeme Adı], " +
@@ -809,10 +821,8 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                                     amount
                             );
 
-                            // If we're in inspect mode and the receipt is completed,
-                            // set the scanned amount equal to the required amount
                             if (inspectMode && isCompleted) {
-                                receipt.setAmount(amount);  // Set scanned amount equal to required amount
+                                receipt.setAmount(amount);
                             }
 
                             detailsList.add(receipt);
@@ -1063,6 +1073,8 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
 
 class ReceiptItemManager {
     private static final String TAG = "ReceiptItemManager";
+    private static final Pattern QR_SERIAL_PATTERN_TEDAS = Pattern.compile("KAREKODNO_(\\d+ENT\\d+)");
+    private static final Pattern QR_SERIAL_PATTERN_TCDD = Pattern.compile("KAREKODNO_(ENT\\d+)");
     private final String receiptNo;
     private final DatabaseHelper databaseHelper;
     private final Context context;  // Add this line
@@ -1094,16 +1106,41 @@ class ReceiptItemManager {
     }
 
     public static class ScannedQRItem {
-        String serialNumber;  // KAREKODNO serial
-        String itemCode;      // Tiger item code
-        String orgnr;
+        String serialNumber;      // Full serial (e.g., 561007ENT24000009)
+        String itemCode;         // Item code (e.g., 110000110090300)
+        String kareKodNo;       // Extracted KAREKODNO value (e.g., 22000401)
+        Integer shipPlanLineId; // Associated line ID
 
-        public ScannedQRItem(String serialNumber, String itemCode, String orgnr) {
+        public ScannedQRItem(String serialNumber, String itemCode, String kareKodNo, Integer shipPlanLineId) {
             this.serialNumber = serialNumber;
             this.itemCode = itemCode;
-            this.orgnr = orgnr;
+            this.kareKodNo = kareKodNo;
+            this.shipPlanLineId = shipPlanLineId;
         }
     }
+    private String extractKareKodNo(String qrCode) {
+        try {
+            // Check if it's TCDD format
+            if (qrCode.contains("|TCDD|")) {
+                Matcher matcher = Pattern.compile("KAREKODNO_(ENT\\d+)").matcher(qrCode);
+                if (matcher.find()) {
+                    // For TCDD format, just return the numeric part after ENT
+                    String fullKareKod = matcher.group(1);
+                    return fullKareKod.replace("ENT", "");
+                }
+            } else {
+                // Original TEDAS format remains unchanged
+                Matcher matcher = Pattern.compile("KAREKODNO_\\d+ENT(\\d+)").matcher(qrCode);
+                if (matcher.find()) {
+                    return matcher.group(1);
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error extracting KAREKODNO", e);
+        }
+        return null;
+    }
+
     // Add this method to load draft data
     public void loadDraftData(DraftData draftData) {
         Log.d(TAG, "=== Starting loadDraftData ===");
@@ -1270,7 +1307,7 @@ class ReceiptItemManager {
     public void loadReceiptItems() {
         Log.d(TAG, "Loading receipt items for receipt: " + receiptNo);
 
-        try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {  // Changed to AnatoliaSoft connection
+        try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
             itemQuantities.clear();
             scannedItemCounts.clear();
             itemNames.clear();
@@ -1287,7 +1324,6 @@ class ReceiptItemManager {
                             "    INNER JOIN %s AST_IT ON AST_IT.CODE = IT.CODE " +
                             "    WHERE SHP.SLIPNR = ? " +
                             "    AND AST_IT.GROUPCODE = 'DIREK' " +  // Only include DIREK items
-                            "    AND (AST_IT.GROUPCODE2 IS NULL OR AST_IT.GROUPCODE2 <> 'DIREKDEM') " +  // Exclude DIREKDEM
                             ")" +
                             "SELECT " +
                             "    ItemCode, " +
@@ -1321,12 +1357,6 @@ class ReceiptItemManager {
                 }
             }
 
-            // Log the final state
-            Log.d(TAG, "Finished loading items. Total unique items: " + itemQuantities.size());
-            for (Map.Entry<String, Integer> entry : itemQuantities.entrySet()) {
-                Log.d(TAG, String.format("Loaded: %s -> %d", entry.getKey(), entry.getValue()));
-            }
-
         } catch (SQLException e) {
             Log.e(TAG, "Error loading receipt items: " + e.getMessage(), e);
         }
@@ -1337,8 +1367,19 @@ class ReceiptItemManager {
         Log.d(TAG, "Scanned Items Count: " + getScannedCount());
     }
     private String extractSerialNumber(String qrCode) {
-        Matcher matcher = Pattern.compile("KAREKODNO_([^|]+)").matcher(qrCode);
-        return matcher.find() ? matcher.group(1) : "";
+        // Try TEDAS format first
+        Matcher tedasMatcher = QR_SERIAL_PATTERN_TEDAS.matcher(qrCode);
+        if (tedasMatcher.find()) {
+            return tedasMatcher.group(1);
+        }
+
+        // Try TCDD format
+        Matcher tcddMatcher = QR_SERIAL_PATTERN_TCDD.matcher(qrCode);
+        if (tcddMatcher.find()) {
+            return tcddMatcher.group(1);
+        }
+
+        return "";
     }
 
     public String extractItemCodeFromQR(String qrCode) {
@@ -1350,71 +1391,112 @@ class ReceiptItemManager {
 
     public ScanResult cacheScannedItem(String qrCode) {
         try {
+            // Validate QR format first
+            if (!isValidQRFormat(qrCode)) {
+                Log.d(TAG, "Invalid QR format: " + qrCode);
+                return ScanResult.ITEM_NOT_IN_RECEIPT;
+            }
+
             String serialNumber = extractSerialNumber(qrCode);
             String itemCode = extractItemCodeFromQR(qrCode);
+            String kareKodNo = extractKareKodNo(qrCode);
 
-            // Debug logs
-            Log.d(TAG, "Attempting to scan item: " + itemCode);
-            Log.d(TAG, "Current valid items in itemQuantities: " + itemQuantities.keySet());
+            Log.d(TAG, "Processing QR code: " + qrCode);
+            Log.d(TAG, "Extracted - Serial: " + serialNumber + ", ItemCode: " + itemCode + ", KareKodNo: " + kareKodNo);
 
-            // First check if item exists in our filtered list
+
             if (!itemQuantities.containsKey(itemCode)) {
                 Log.d(TAG, "Rejected: Item not in filtered list: " + itemCode);
                 return ScanResult.ITEM_NOT_IN_RECEIPT;
             }
 
-            // Check if serial exists in AST_SHIPPLAN_QR table
+            // Check if KAREKODNO exists in AST_SHIPPLAN_QR
             try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
                 String query = String.format(
-                        "SELECT COUNT(*) as count FROM %s WHERE SHP_SERIALNO = ?",
+                        "SELECT COUNT(*) as count FROM %s WHERE KAREKODNO = ?",
                         databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN_QR")
                 );
 
                 try (PreparedStatement stmt = conn.prepareStatement(query)) {
-                    stmt.setString(1, serialNumber);
+                    stmt.setString(1, kareKodNo);
                     try (ResultSet rs = stmt.executeQuery()) {
                         if (rs.next() && rs.getInt("count") > 0) {
-                            Log.d(TAG, "Rejected: Serial already exists in database: " + serialNumber);
+                            Log.d(TAG, "Rejected: KAREKODNO already exists in database: " + kareKodNo);
                             return ScanResult.ALREADY_SCANNED;
                         }
                     }
                 }
+
+                // Get SHIPPLANLINEID for this item
+                String lineIdQuery = String.format(
+                        "SELECT sl.ID FROM %s sp " +
+                                "JOIN %s sl ON sp.ID = sl.SHIPPLANID " +
+                                "JOIN %s i ON i.LOGICALREF = sl.ERPITEMID " +
+                                "WHERE sp.SLIPNR = ? AND i.CODE = ?",
+                        databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN"),
+                        databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLANLINE"),
+                        databaseHelper.getTigerDbItemsTableName("ITEMS")
+                );
+
+                Integer shipPlanLineId = null;
+                try (PreparedStatement lineStmt = conn.prepareStatement(lineIdQuery)) {
+                    lineStmt.setString(1, receiptNo);
+                    lineStmt.setString(2, itemCode);
+                    try (ResultSet rs = lineStmt.executeQuery()) {
+                        if (rs.next()) {
+                            shipPlanLineId = rs.getInt("ID");
+                        }
+                    }
+                }
+
+                if (scannedSerials.contains(serialNumber)) {
+                    Log.d(TAG, "Rejected: Serial already scanned in current session: " + serialNumber);
+                    return ScanResult.ALREADY_SCANNED;
+                }
+
+                int allowedQuantity = itemQuantities.get(itemCode);
+                int currentCount = scannedItemCounts.getOrDefault(itemCode, 0);
+
+                if (currentCount >= allowedQuantity) {
+                    Log.d(TAG, "Rejected: Item quantity exceeded");
+                    return ScanResult.COMPLETE_ITEM;
+                }
+
+                scannedSerials.add(serialNumber);
+                qrCodeCache.add(new ScannedQRItem(serialNumber, itemCode, kareKodNo, shipPlanLineId));
+                scannedItemCounts.put(itemCode, currentCount + 1);
+
+                Log.d(TAG, String.format("Successfully scanned item %s. New count: %d/%d",
+                        itemCode, currentCount + 1, allowedQuantity));
+
+                return ScanResult.SUCCESS;
+
             } catch (SQLException e) {
-                Log.e(TAG, "Error checking serial in database", e);
+                Log.e(TAG, "Database error in cacheScannedItem", e);
+                return ScanResult.ITEM_NOT_IN_RECEIPT;
             }
-
-            // Check for duplicate serial in current session
-            if (scannedSerials.contains(serialNumber)) {
-                Log.d(TAG, "Rejected: Serial already scanned in current session: " + serialNumber);
-                return ScanResult.ALREADY_SCANNED;
-            }
-
-            // Get the allowed quantity for this item
-            int allowedQuantity = itemQuantities.get(itemCode);
-            int currentCount = scannedItemCounts.getOrDefault(itemCode, 0);
-
-            Log.d(TAG, String.format("Item: %s, Current Count: %d, Allowed: %d",
-                    itemCode, currentCount, allowedQuantity));
-
-            if (currentCount >= allowedQuantity) {
-                Log.d(TAG, "Rejected: Item quantity exceeded");
-                return ScanResult.COMPLETE_ITEM;
-            }
-
-            // If we get here, the item is valid and can be scanned
-            scannedSerials.add(serialNumber);
-            qrCodeCache.add(new ScannedQRItem(serialNumber, itemCode, null));
-            scannedItemCounts.put(itemCode, currentCount + 1);
-
-            Log.d(TAG, String.format("Successfully scanned item %s. New count: %d/%d",
-                    itemCode, currentCount + 1, allowedQuantity));
-
-            return ScanResult.SUCCESS;
 
         } catch (Exception e) {
             Log.e(TAG, "Error in cacheScannedItem: " + e.getMessage(), e);
             return ScanResult.ITEM_NOT_IN_RECEIPT;
         }
+    }
+
+    private boolean isValidQRFormat(String qrCode) {
+        if (qrCode == null) return false;
+
+        // Check for common required fields
+        boolean hasBasicFormat = qrCode.contains("KAREKODNO_") &&
+                qrCode.contains("MARKA_ENT") &&
+                qrCode.contains("MALZEME_BETON");
+
+        if (!hasBasicFormat) return false;
+
+        // Check for either TCDD or TEDASKIRILIM format
+        boolean isTCDD = qrCode.contains("|TCDD|");
+        boolean isTEDAS = qrCode.contains("TEDASKIRILIM_");
+
+        return isTCDD || isTEDAS;
     }
 
     public boolean bulkInsertScannedItems() {
@@ -1426,33 +1508,31 @@ class ReceiptItemManager {
             String shipPlanTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN");
             String shipPlanQRTable = databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN_QR");
 
-            // Get ORGNR and ID from AST_SHIPPLAN
+            // Get SHIPPLANID from AST_SHIPPLAN
             String findShipPlanQuery = String.format(
-                    "SELECT ID, ORGNR FROM %s WHERE STATUS = 0 AND SLIPNR = ?",
+                    "SELECT ID FROM %s WHERE STATUS = 0 AND SLIPNR = ?",
                     shipPlanTable
             );
 
-            String orgnr = null;
             int shipPlanId = -1;
-
             try (PreparedStatement stmt = conn.prepareStatement(findShipPlanQuery)) {
                 stmt.setString(1, receiptNo);
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
-                        orgnr = rs.getString("ORGNR");
                         shipPlanId = rs.getInt("ID");
                     }
                 }
             }
 
-            if (orgnr == null || shipPlanId == -1) {
-                Log.e(TAG, "Could not find ORGNR or ID for receipt: " + receiptNo);
+            if (shipPlanId == -1) {
+                Log.e(TAG, "Could not find ID for receipt: " + receiptNo);
                 return false;
             }
 
-            // Insert QR records
+            // Insert QR records with new columns
             String insertQuery = String.format(
-                    "INSERT INTO %s (SHP_SERIALNO, SHP_ITEMCODE, SHP_ID, SHIPPLANID) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO %s (SHP_SERIALNO, SHP_ITEMCODE, SHIPPLANID, KAREKODNO, SHIPPLANLINEID) " +
+                            "VALUES (?, ?, ?, ?, ?)",
                     shipPlanQRTable
             );
 
@@ -1460,8 +1540,9 @@ class ReceiptItemManager {
                 for (ScannedQRItem item : qrCodeCache) {
                     insertStmt.setString(1, item.serialNumber);
                     insertStmt.setString(2, item.itemCode);
-                    insertStmt.setString(3, orgnr);
-                    insertStmt.setInt(4, shipPlanId);  // Add SHIPPLANID
+                    insertStmt.setInt(3, shipPlanId);
+                    insertStmt.setString(4, item.kareKodNo);
+                    insertStmt.setInt(5, item.shipPlanLineId);
                     insertStmt.addBatch();
                 }
                 insertStmt.executeBatch();
@@ -1562,7 +1643,7 @@ class CameraSourcePreview extends ViewGroup {
                         cameraSource.start(holder);
                         Log.d("CameraPreview", "Camera started on surface ready");
                     } catch (IOException e) {
-                        Log.e("CameraPreview", "IOException during camera start", e);
+                        Log.e("Preview", "IOException during camera start", e);
                     }
                 }
             }
