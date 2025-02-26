@@ -27,6 +27,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import android.Manifest;
@@ -1100,6 +1101,10 @@ class ReceiptItemManager {
     private Map<String, String> itemNames = new HashMap<>(); // itemCode -> itemName
     private Set<String> scannedSerials = new HashSet<>(); // KAREKODNO serials
     private List<ScannedQRItem> qrCodeCache = new ArrayList<>();
+    // Add this new map to track quantities per shipment line
+    private Map<Integer, Integer> lineQuantities = new HashMap<>(); // lineId -> total quantity
+    private Map<Integer, Integer> lineScannedCounts = new HashMap<>(); // lineId -> scanned count
+    private Map<Integer, String> lineItemCodes = new HashMap<>(); // lineId -> itemCode
 
     public enum ScanResult {
         SUCCESS, ALREADY_SCANNED, ITEM_NOT_IN_RECEIPT, COMPLETE_ITEM
@@ -1311,26 +1316,22 @@ class ReceiptItemManager {
             itemQuantities.clear();
             scannedItemCounts.clear();
             itemNames.clear();
+            lineQuantities.clear();
+            lineScannedCounts.clear();
+            lineItemCodes.clear();
 
             String query = String.format(
-                    "WITH FilteredItems AS (" +
-                            "    SELECT " +
-                            "        IT.CODE AS ItemCode, " +
-                            "        IT.NAME AS ItemName, " +
-                            "        SHPL.QUANTITY AS ItemQuantity " +
-                            "    FROM %s SHP " +
-                            "    INNER JOIN %s SHPL ON SHP.ID = SHPL.SHIPPLANID " +
-                            "    INNER JOIN %s IT ON IT.LOGICALREF = SHPL.ERPITEMID " +
-                            "    INNER JOIN %s AST_IT ON AST_IT.CODE = IT.CODE " +
-                            "    WHERE SHP.SLIPNR = ? " +
-                            "    AND AST_IT.GROUPCODE = 'DIREK' " +  // Only include DIREK items
-                            ")" +
-                            "SELECT " +
-                            "    ItemCode, " +
-                            "    ItemName, " +
-                            "    SUM(ItemQuantity) AS TotalQuantity " +
-                            "FROM FilteredItems " +
-                            "GROUP BY ItemCode, ItemName",
+                    "SELECT " +
+                            "IT.CODE AS ItemCode, " +
+                            "IT.NAME AS ItemName, " +
+                            "SHPL.QUANTITY AS ItemQuantity, " +
+                            "SHPL.ID AS LineID " +
+                            "FROM %s SHP " +
+                            "INNER JOIN %s SHPL ON SHP.ID = SHPL.SHIPPLANID " +
+                            "INNER JOIN %s IT ON IT.LOGICALREF = SHPL.ERPITEMID " +
+                            "INNER JOIN %s AST_IT ON AST_IT.CODE = IT.CODE " +
+                            "WHERE SHP.SLIPNR = ? " +
+                            "AND AST_IT.GROUPCODE = 'DIREK'",
                     databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN"),
                     databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLANLINE"),
                     databaseHelper.getTigerDbItemsTableName("ITEMS"),
@@ -1345,20 +1346,74 @@ class ReceiptItemManager {
                     while (rs.next()) {
                         String itemCode = rs.getString("ItemCode");
                         String itemName = rs.getString("ItemName");
-                        int quantity = rs.getInt("TotalQuantity");
+                        int quantity = rs.getInt("ItemQuantity");
+                        int lineId = rs.getInt("LineID");
 
-                        Log.d(TAG, String.format("Found item: Code=%s, Name=%s, Quantity=%d",
-                                itemCode, itemName, quantity));
+                        Log.d(TAG, String.format("Found item: Code=%s, Name=%s, Quantity=%d, LineID=%d",
+                                itemCode, itemName, quantity, lineId));
 
-                        itemQuantities.put(itemCode, quantity);
+                        // Track total quantities per item code
+                        int currentTotal = itemQuantities.getOrDefault(itemCode, 0);
+                        itemQuantities.put(itemCode, currentTotal + quantity);
+
+                        // Keep track of item names
                         itemNames.put(itemCode, itemName);
-                        scannedItemCounts.put(itemCode, 0);
+
+                        // Initialize scanned count if first time
+                        if (!scannedItemCounts.containsKey(itemCode)) {
+                            scannedItemCounts.put(itemCode, 0);
+                        }
+
+                        // Track quantities per line
+                        lineQuantities.put(lineId, quantity);
+                        lineScannedCounts.put(lineId, 0);
+                        lineItemCodes.put(lineId, itemCode);
                     }
                 }
             }
 
+            // Now load any existing scanned QR codes from the database
+            loadExistingScannedItems();
+
         } catch (SQLException e) {
             Log.e(TAG, "Error loading receipt items: " + e.getMessage(), e);
+        }
+    }
+    // New method to load already scanned items from database
+    private void loadExistingScannedItems() {
+        try (Connection conn = databaseHelper.getAnatoliaSoftConnection()) {
+            String query = String.format(
+                    "SELECT SHP_SERIALNO, SHP_ITEMCODE, KAREKODNO, SHIPPLANLINEID " +
+                            "FROM %s WHERE SHIPPLANID = (" +
+                            "  SELECT ID FROM %s WHERE SLIPNR = ?)",
+                    databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN_QR"),
+                    databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN")
+            );
+
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, receiptNo);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        String serialNo = rs.getString("SHP_SERIALNO");
+                        String itemCode = rs.getString("SHP_ITEMCODE");
+                        String kareKodNo = rs.getString("KAREKODNO");
+                        int lineId = rs.getInt("SHIPPLANLINEID");
+
+                        // Update tracking maps
+                        scannedSerials.add(serialNo);
+
+                        // Update item-level counts
+                        int currentCount = scannedItemCounts.getOrDefault(itemCode, 0);
+                        scannedItemCounts.put(itemCode, currentCount + 1);
+
+                        // Update line-level counts
+                        int currentLineCount = lineScannedCounts.getOrDefault(lineId, 0);
+                        lineScannedCounts.put(lineId, currentLineCount + 1);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            Log.e(TAG, "Error loading existing scanned items: " + e.getMessage(), e);
         }
     }
     // Add this method to help with debugging
@@ -1389,6 +1444,7 @@ class ReceiptItemManager {
                 : "";
     }
 
+    // Modified cacheScannedItem method to assign to the correct line
     public ScanResult cacheScannedItem(String qrCode) {
         try {
             // Validate QR format first
@@ -1404,10 +1460,15 @@ class ReceiptItemManager {
             Log.d(TAG, "Processing QR code: " + qrCode);
             Log.d(TAG, "Extracted - Serial: " + serialNumber + ", ItemCode: " + itemCode + ", KareKodNo: " + kareKodNo);
 
-
             if (!itemQuantities.containsKey(itemCode)) {
                 Log.d(TAG, "Rejected: Item not in filtered list: " + itemCode);
                 return ScanResult.ITEM_NOT_IN_RECEIPT;
+            }
+
+            // Check if already scanned
+            if (scannedSerials.contains(serialNumber)) {
+                Log.d(TAG, "Rejected: Serial already scanned in current session: " + serialNumber);
+                return ScanResult.ALREADY_SCANNED;
             }
 
             // Check if KAREKODNO exists in AST_SHIPPLAN_QR
@@ -1427,33 +1488,37 @@ class ReceiptItemManager {
                     }
                 }
 
-                // Get SHIPPLANLINEID for this item
-                String lineIdQuery = String.format(
-                        "SELECT sl.ID FROM %s sp " +
-                                "JOIN %s sl ON sp.ID = sl.SHIPPLANID " +
-                                "JOIN %s i ON i.LOGICALREF = sl.ERPITEMID " +
-                                "WHERE sp.SLIPNR = ? AND i.CODE = ?",
-                        databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN"),
-                        databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLANLINE"),
-                        databaseHelper.getTigerDbItemsTableName("ITEMS")
-                );
+                // Find appropriate line that needs items based on current scan count
+                Integer selectedLineId = null;
 
-                Integer shipPlanLineId = null;
-                try (PreparedStatement lineStmt = conn.prepareStatement(lineIdQuery)) {
-                    lineStmt.setString(1, receiptNo);
-                    lineStmt.setString(2, itemCode);
-                    try (ResultSet rs = lineStmt.executeQuery()) {
-                        if (rs.next()) {
-                            shipPlanLineId = rs.getInt("ID");
-                        }
+                // First find all lines containing this item code
+                List<Integer> matchingLines = new ArrayList<>();
+                for (Map.Entry<Integer, String> entry : lineItemCodes.entrySet()) {
+                    if (entry.getValue().equals(itemCode)) {
+                        matchingLines.add(entry.getKey());
                     }
                 }
 
-                if (scannedSerials.contains(serialNumber)) {
-                    Log.d(TAG, "Rejected: Serial already scanned in current session: " + serialNumber);
-                    return ScanResult.ALREADY_SCANNED;
+                // Sort lines by ID to ensure we fill them in order
+                Collections.sort(matchingLines);
+
+                // Find the first line that still needs items
+                for (Integer lineId : matchingLines) {
+                    int lineQuantity = lineQuantities.get(lineId);
+                    int lineScanned = lineScannedCounts.getOrDefault(lineId, 0);
+
+                    if (lineScanned < lineQuantity) {
+                        selectedLineId = lineId;
+                        break;
+                    }
                 }
 
+                if (selectedLineId == null) {
+                    Log.d(TAG, "Rejected: All lines for this item are already filled");
+                    return ScanResult.COMPLETE_ITEM;
+                }
+
+                // Check total counts for this item code
                 int allowedQuantity = itemQuantities.get(itemCode);
                 int currentCount = scannedItemCounts.getOrDefault(itemCode, 0);
 
@@ -1462,12 +1527,19 @@ class ReceiptItemManager {
                     return ScanResult.COMPLETE_ITEM;
                 }
 
+                // Update tracking maps
                 scannedSerials.add(serialNumber);
-                qrCodeCache.add(new ScannedQRItem(serialNumber, itemCode, kareKodNo, shipPlanLineId));
+                qrCodeCache.add(new ScannedQRItem(serialNumber, itemCode, kareKodNo, selectedLineId));
+
+                // Update item-level counts
                 scannedItemCounts.put(itemCode, currentCount + 1);
 
-                Log.d(TAG, String.format("Successfully scanned item %s. New count: %d/%d",
-                        itemCode, currentCount + 1, allowedQuantity));
+                // Update line-level counts
+                int currentLineCount = lineScannedCounts.getOrDefault(selectedLineId, 0);
+                lineScannedCounts.put(selectedLineId, currentLineCount + 1);
+
+                Log.d(TAG, String.format("Successfully scanned item %s for line %d. New count: %d/%d",
+                        itemCode, selectedLineId, currentCount + 1, allowedQuantity));
 
                 return ScanResult.SUCCESS;
 
@@ -1481,7 +1553,6 @@ class ReceiptItemManager {
             return ScanResult.ITEM_NOT_IN_RECEIPT;
         }
     }
-
     private boolean isValidQRFormat(String qrCode) {
         if (qrCode == null) return false;
 
