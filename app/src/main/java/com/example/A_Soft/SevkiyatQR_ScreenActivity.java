@@ -80,14 +80,15 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
     private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
     private long lastScanTime = 0;
     private static final long SCAN_DEBOUNCE_INTERVAL = 2000; // 2 seconds
-
     private ImageButton cameraStateButton;
     private boolean isCameraActive = false;
     private static final String PREF_NAME = "SevkiyatDrafts";
     private static final String KEY_DRAFT_DATA = "draft_data";
     private ImageButton saveAsDraftButton;
     private SharedPreferences sharedPreferences;
-
+    private String lastSavedQR = "";
+    private long lastSavedQRTime = 0;
+    private static final long QR_SAVE_DEBOUNCE_INTERVAL = 2000; // 2 seconds
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -102,12 +103,6 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
 
         // Initialize components with inspect mode consideration
         initializeComponents();
-        // Load any existing draft data (only if not in inspect mode)
-        if (!inspectMode) {
-            loadDraftData();
-        }
-        // Load any existing draft data
-        loadDraftData();
 
         // Check for camera permission (only if not in inspect mode)
         if (!inspectMode && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
@@ -117,7 +112,8 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             requestCameraPermission();
         }
 
-        loadReceiptItems();
+        // Note: loadReceiptItems is now called from initializeComponents
+        // and loadDraftData will be called after the items are loaded
     }
 
     private void requestCameraPermission() {
@@ -198,9 +194,6 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
 
         // First load receipt items - this will initialize our data structures
         loadReceiptItems();
-
-        // Then populate the table with the loaded data, passing inspect mode flag
-        new FetchItemsTask(databaseHelper, inspectMode).execute(currentReceiptNo);
 
         // Only set up interactive components if not in inspect mode
         if (!inspectMode) {
@@ -293,6 +286,12 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                 isProcessing = true;
 
                 String scannedData = s.toString().trim();
+
+                // Save raw QR regardless of format
+                if (!scannedData.isEmpty()) {
+                    saveRawQRCode(scannedData);
+                }
+
                 if (isValidQRFormat(scannedData)) {
                     executorService.submit(() -> {
                         ReceiptItemManager.ScanResult result = itemManager.cacheScannedItem(scannedData);
@@ -319,6 +318,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         dialog.show();
     }
 
+
     private boolean isValidQRFormat(String qrCode) {
         if (qrCode == null) return false;
 
@@ -335,7 +335,85 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
 
         return isTCDD || isTEDAS;
     }
+    private boolean isValidCompleteQR(String qrCode) {
+        // Check for valid format that indicates a complete QR
+        return qrCode != null &&
+                qrCode.contains("KAREKODNO_") &&
+                qrCode.contains("MARKA_ENT") &&
+                qrCode.contains("MALZEME_") &&
+                qrCode.length() > 50; // Minimum expected length for a complete QR
+    }
+    private void saveRawQRCode(String rawQRCode) {
+        // Skip empty or very short strings that are likely partial scans
+        if (rawQRCode == null || rawQRCode.length() < 10) {
+            return;
+        }
 
+        // Check if it's a complete QR code - only save complete QRs
+        boolean isComplete = isValidCompleteQR(rawQRCode);
+        if (!isComplete) {
+            Log.d(TAG, "Skipping incomplete QR code: " + rawQRCode);
+            return;
+        }
+
+        // Debounce logic - only save if it's different from the last one or enough time has passed
+        long currentTime = System.currentTimeMillis();
+        if (rawQRCode.equals(lastSavedQR) &&
+                (currentTime - lastSavedQRTime < QR_SAVE_DEBOUNCE_INTERVAL)) {
+            Log.d(TAG, "Debouncing duplicate QR code: " + rawQRCode);
+            return;
+        }
+
+        // Execute in background
+        executorService.submit(() -> {
+            try (Connection connection = databaseHelper.getAnatoliaSoftConnection()) {
+                // First check if this exact QR code already exists for this receipt
+                String checkQuery = String.format(
+                        "SELECT COUNT(*) FROM %s WHERE QR_TEXT = ? AND RECEIPT_NO = ?",
+                        databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN_QR2")
+                );
+
+                boolean exists = false;
+                try (PreparedStatement checkStmt = connection.prepareStatement(checkQuery)) {
+                    checkStmt.setString(1, rawQRCode);
+                    checkStmt.setString(2, currentReceiptNo);
+
+                    try (ResultSet rs = checkStmt.executeQuery()) {
+                        if (rs.next() && rs.getInt(1) > 0) {
+                            exists = true;
+                            Log.d(TAG, "QR code already exists, skipping insertion: " + rawQRCode);
+                        }
+                    }
+                }
+
+                // Only insert if it doesn't already exist
+                if (!exists) {
+                    String insertQuery = String.format(
+                            "INSERT INTO %s (QR_TEXT, RECEIPT_NO, SCAN_DATETIME) VALUES (?, ?, CURRENT_TIMESTAMP)",
+                            databaseHelper.getAnatoliaSoftTableName("AST_SHIPPLAN_QR2")
+                    );
+
+                    try (PreparedStatement insertStmt = connection.prepareStatement(insertQuery)) {
+                        insertStmt.setString(1, rawQRCode);
+                        insertStmt.setString(2, currentReceiptNo);
+
+                        int rowsAffected = insertStmt.executeUpdate();
+                        if (rowsAffected > 0) {
+                            Log.d(TAG, "Raw QR code saved successfully: " + rawQRCode);
+
+                            // Update last saved QR tracking
+                            lastSavedQR = rawQRCode;
+                            lastSavedQRTime = currentTime;
+                        } else {
+                            Log.e(TAG, "Failed to save raw QR code: " + rawQRCode);
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                Log.e(TAG, "Error saving raw QR code: " + e.getMessage(), e);
+            }
+        });
+    }
     private void handleScanResult(ReceiptItemManager.ScanResult result, String scannedData) {
         switch (result) {
             case SUCCESS:
@@ -366,12 +444,24 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
                 .show();
     }
     private void saveDraft() {
+        // Convert ScannedQRItem objects to ScannedQRDetails objects
+        List<DraftData.ScannedQRDetails> scannedQRDetails = new ArrayList<>();
+        for (ReceiptItemManager.ScannedQRItem item : itemManager.getQRCodeCache()) {
+            scannedQRDetails.add(new DraftData.ScannedQRDetails(
+                    item.serialNumber,
+                    item.itemCode,
+                    item.kareKodNo,
+                    item.shipPlanLineId
+            ));
+        }
+
         DraftData draftData = new DraftData(
                 currentReceiptNo,
                 itemManager.getScannedSerials(),
                 itemManager.getScannedItemCounts(),
                 itemManager.getItemQuantities(),
-                itemManager.getItemNames()
+                itemManager.getItemNames(),
+                scannedQRDetails  // Add this new parameter
         );
 
         SharedPreferences.Editor editor = sharedPreferences.edit();
@@ -536,6 +626,11 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             public void receiveDetections(Detector.Detections<Barcode> detections) {
                 if (detections != null && detections.getDetectedItems().size() > 0) {
                     Barcode barcode = detections.getDetectedItems().valueAt(0);
+
+                    // Save raw QR data regardless of format
+                    saveRawQRCode(barcode.displayValue);
+
+                    // Then continue with normal processing
                     processQRCode(barcode.displayValue);
                 }
             }
@@ -575,6 +670,9 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
         }
 
         try {
+            // Save raw QR code regardless of format or validity
+            saveRawQRCode(qrCodeData);
+
             if (!QR_SERIAL_PATTERN.matcher(qrCodeData).find()) {
                 showAlert("Hata", "Geçersiz Kare kod formatı");
                 return;
@@ -583,7 +681,7 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             lastScanTime = currentTime;
 
             executorService.submit(() -> {
-                // Log the QR code being processed
+                // Rest of existing code remains the same
                 Log.d(TAG, "Processing QR code: " + qrCodeData);
 
                 ReceiptItemManager.ScanResult result = itemManager.cacheScannedItem(qrCodeData);
@@ -650,9 +748,12 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             itemManager.loadReceiptItems();
             itemManager.logItemState();
             itemManager.printItemCounts();
-            // Update this line if it exists
+            // Update this line to load draft data after items are loaded
             runOnUiThread(() -> {
-                loadDraftData();
+                // Only load draft data if not in inspect mode
+                if (!inspectMode) {
+                    loadDraftData();
+                }
                 new FetchItemsTask(databaseHelper, inspectMode).execute(currentReceiptNo);
                 updateScanStatus();
             });
@@ -1070,6 +1171,31 @@ public class SevkiyatQR_ScreenActivity extends AppCompatActivity {
             executorService.shutdownNow();
         }
     }
+    @Override
+    public void onBackPressed() {
+        // Only show dialog if not in inspect mode and we have scanned items
+        if (!inspectMode && itemManager.getScannedCount() > 0) {
+            // Show confirmation dialog
+            new AlertDialog.Builder(this)
+                    .setTitle("Uyarı")
+                    .setMessage("Okutulmuş ürünler var, taslak olarak kaydedilsin mi?")
+                    .setPositiveButton("Evet", (dialog, which) -> {
+                        // Save as draft
+                        saveDraft();
+                        // Then finish activity
+                        finish();
+                    })
+                    .setNegativeButton("Hayır", (dialog, which) -> {
+                        // Just finish without saving
+                        finish();
+                    })
+                    .setCancelable(true)
+                    .show();
+        } else {
+            // No scanned items or in inspect mode, just finish normally
+            super.onBackPressed();
+        }
+    }
 }
 
 class ReceiptItemManager {
@@ -1094,7 +1220,9 @@ class ReceiptItemManager {
     public Map<String, String> getItemNames() {
         return new HashMap<>(itemNames);
     }
-
+    public List<ScannedQRItem> getQRCodeCache() {
+        return new ArrayList<>(qrCodeCache);
+    }
     // Updated data structures
     private Map<String, Integer> itemQuantities = new HashMap<>(); // itemCode -> total quantity
     private Map<String, Integer> scannedItemCounts = new HashMap<>(); // itemCode -> scanned count
@@ -1165,6 +1293,24 @@ class ReceiptItemManager {
         this.scannedItemCounts = filteredCounts;
         this.scannedSerials = new HashSet<>(draftData.scannedSerials);
 
+        // Clear and reload the QR code cache from draft data
+        this.qrCodeCache.clear();
+        if (draftData.scannedQRDetails != null) {
+            for (DraftData.ScannedQRDetails detail : draftData.scannedQRDetails) {
+                // Only add items that are in our filtered list
+                if (itemQuantities.containsKey(detail.itemCode)) {
+                    this.qrCodeCache.add(new ScannedQRItem(
+                            detail.serialNumber,
+                            detail.itemCode,
+                            detail.kareKodNo,
+                            detail.shipPlanLineId
+                    ));
+                    Log.d(TAG, String.format("Loaded QR detail from draft: Item %s, Serial %s",
+                            detail.itemCode, detail.serialNumber));
+                }
+            }
+        }
+
         Log.d(TAG, "=== End loadDraftData ===");
     }
     public ReceiptItemManager(String receiptNo, DatabaseHelper databaseHelper, Context context) {
@@ -1193,14 +1339,38 @@ class ReceiptItemManager {
             if (currentCount > 0) {
                 scannedItemCounts.put(itemCode, currentCount - 1);
 
-                // Remove from QR cache
-                qrCodeCache.removeIf(item -> item.serialNumber.equals(serialNumber));
+                // Find the QR item to remove
+                ScannedQRItem itemToRemove = null;
+                for (ScannedQRItem item : qrCodeCache) {
+                    if (item.serialNumber.equals(serialNumber)) {
+                        itemToRemove = item;
+                        break;
+                    }
+                }
+
+                // If we found the item, update the line scanned count
+                if (itemToRemove != null) {
+                    Integer lineId = itemToRemove.shipPlanLineId;
+                    if (lineId != null) {
+                        int lineCount = lineScannedCounts.getOrDefault(lineId, 0);
+                        if (lineCount > 0) {
+                            lineScannedCounts.put(lineId, lineCount - 1);
+                        }
+                    }
+
+                    // Remove from QR cache
+                    qrCodeCache.remove(itemToRemove);
+                } else {
+                    // If we couldn't find the item in the cache, just remove any item with the matching serial
+                    qrCodeCache.removeIf(item -> item.serialNumber.equals(serialNumber));
+                }
+
+                Log.d(TAG, "Successfully removed scanned item: " + serialNumber);
                 return true;
             }
         }
         return false;
     }
-
     public boolean removeItemFromShipment(String itemName) {
         String itemCode = getItemCodeByName(itemName);
         if (itemCode == null) return false;
@@ -1558,8 +1728,7 @@ class ReceiptItemManager {
 
         // Check for common required fields
         boolean hasBasicFormat = qrCode.contains("KAREKODNO_") &&
-                qrCode.contains("MARKA_ENT") &&
-                qrCode.contains("MALZEME_BETON");
+                qrCode.contains("MARKA_ENT");
 
         if (!hasBasicFormat) return false;
 
@@ -1695,6 +1864,7 @@ class ReceiptItemManager {
 
         return itemCode != null ? scannedItemCounts.getOrDefault(itemCode, 0) : 0;
     }
+
 }
 class CameraSourcePreview extends ViewGroup {
     private SurfaceView surfaceView;
